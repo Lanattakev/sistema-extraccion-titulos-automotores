@@ -14,23 +14,24 @@
 ## 1. Contexto Estratégico & Propuesta de Valor
 
 ### 1.1. Foco Estratégico & Alcance
-* **Mercado Objetivo:** `{definicion_de_industria_o_nicho_objetivo}`.
-* **Buyer Persona (Decisor / Cliente Ideal):** `{perfil_del_comprador_o_tomador_de_decision}`.
-* **User Persona (Operador / Usuario Final):** `{perfil_del_usuario_final_u_operador_del_sistema}`.
-* **Alcance Geográfico & Modalidad:** `{ej_Servicio_cloud_global_o_despliegue_on_premise_hibrido}`.
-* **Fuera de Alcance (*Out of Scope*):** `{lista_de_elementos_o_features_excluidas_en_esta_etapa}`.
+* **Mercado Objetivo:** Procesos de gestión documental automotor que requieren transcribir, revisar y registrar datos de títulos de vehículos. El MVP se orienta a evaluar esa necesidad en un entorno local; el segmento comercial y la demanda aún no están validados.
+* **Buyer Persona (Decisor / Cliente Ideal):** Como hipótesis por validar, responsable de un proceso de gestión documental automotor que evalúa herramientas para asistir la carga y revisión de datos. Se distingue del operador que usa la API; no hay compradores ni contratos documentados.
+* **User Persona (Operador / Usuario Final):** Operador que carga un título, revisa los campos propuestos y registra datos completos mediante la API o Swagger.
+* **Alcance Geográfico & Modalidad:** MVP local con archivos en disco y SQLite. La extracción reconoce formatos de patentes argentinas; no se declara cobertura internacional ni despliegue cloud.
+
+* **Fuera de Alcance (*Out of Scope*):** OCR operativo, aprobación automática, interfaz dedicada de revisión, autenticación, roles e integración con registros oficiales. OCR con Tesseract en preparación, no terminado.
 
 ### 1.2. Pilares de Valor de la Solución
 | Pilar | Enfoque | Implementación en este Sistema |
 | :--- | :--- | :--- |
-| **1. Activos & Entorno Operativo** | Infraestructura física, dispositivos, hardware o fuentes de datos base. | `{descripcion_interaccion_con_activos_o_dispositivos}` |
-| **2. Software & Lógica de Negocio** | Captura, procesamiento en tiempo real, persistencia y APIs. | `{descripcion_del_flujo_de_datos_api_o_interfaz}` |
-| **3. Impacto Económico & ROI** | Optimización de costos, generación de ingresos o eficiencia operativa. | `{descripcion_del_impacto_economico_o_ahorro_esperado}` |
+| **1. Activos & Entorno Operativo** | Infraestructura física, dispositivos, hardware o fuentes de datos base. | Carga de PDF, JPG/JPEG y PNG de hasta 10 MiB por archivo, con UUID interno y metadatos JSON en disco local. Las imágenes se almacenan; no se procesan con OCR. |
+| **2. Software & Lógica de Negocio** | Captura, procesamiento en tiempo real, persistencia y APIs. | FastAPI y Swagger; extracción de texto de PDF con pypdf y propuesta de patente, marca, modelo, motor, chasis y año. Campos ausentes, inválidos o contradictorios quedan en null; requiere_revision es true. Alta y consulta de datos completos en SQLite, separadas de la extracción. |
+| **3. Impacto Económico & ROI** | Optimización de costos, generación de ingresos o eficiencia operativa. | Se busca reducir transcripción manual y facilitar la revisión humana. No hay mediciones documentadas de ahorro, precisión, tiempos ni retorno económico. |
 
 ### 1.3. Coordinación Operativa, Roles & Seguridad
-* **Liderazgo Técnico / Responsable:** `{responsable_tecnico_o_lead_developer}`.
-* **Ventanas Operativas & Disponibilidad:** `{restricciones_horarias_y_ventanas_de_mantenimiento_o_soporte}`.
-* **Habilitaciones, Normativas & Seguridad:** `{certificaciones_normativas_legales_y_requisitos_de_acceso}`.
+* **Liderazgo Técnico / Responsable:** El equipo humano toma las decisiones del proyecto, aprueba los cambios y valida los resultados. Es responsable del mantenimiento y de la revisión de los aportes de las herramientas de desarrollo asistido.
+* **Ventanas Operativas & Disponibilidad:** Ejecución local para desarrollo y validación; sin horarios de soporte, ventanas de mantenimiento ni SLA definidos.
+* **Habilitaciones, Normativas & Seguridad:** Validación de nombre, extensión, tamaño y contenido no vacío, nombres internos UUID y consultas SQL parametrizadas. La extensión no certifica el contenido del archivo. Sin autenticación, roles ni certificaciones acreditadas. Usar documentos sintéticos y mantener archivos, metadatos, bases de datos y secretos fuera del repositorio. No se declara cumplimiento normativo ni aptitud para exposición pública.
 
 ---
 
@@ -39,27 +40,28 @@
 ### 2.1. Matriz del Business Model Canvas
 | Bloque Canvas | Definición Estratégica | Componentes Clave en el Software |
 | :--- | :--- | :--- |
-| **1. Socios Clave (KP)** | `{alianzas_proveedores_cloud_o_integradores_externos}` | `{integraciones_apis_o_pasarelas_asociadas}` |
-| **2. Actividades Clave (KA)** | `{procesamiento_core_desarrollo_soporte_operaciones}` | `{servicios_y_casos_de_uso_principales}` |
-| **3. Recursos Clave (KR)** | `{algoritmos_propiedad_intelectual_bases_de_datos_servidores}` | `{infraestructura_y_modelos_de_datos}` |
-| **4. Propuesta de Valor (VP)** | `{beneficio_unico_que_resuelve_el_problema_del_cliente}` | `{endpoints_publicos_dashboards_o_servicios}` |
-| **5. Relación con Clientes (CR)** | `{automatizada_autoservicio_soporte_dedicado_alertas}` | `{notificadores_webhooks_email_mensajeria}` |
-| **6. Canales de Distribución (CH)** | `{web_api_rest_mobile_brokers_de_mensajeria}` | `{routers_fastapi_controladores_y_suscriptores}` |
-| **7. Segmentos de Clientes (CS)** | `{tipos_de_clientes_o_audiencias_objetivo}` | `{roles_rbac_y_politicas_de_autorizacion}` |
-| **8. Estructura de Costos (CS)** | `{costos_cloud_licencias_mantenimiento_procesamiento}` | `{optimizacion_de_consultas_y_eficiencia_de_recursos}` |
-| **9. Fuentes de Ingresos (RS)** | `{suscripcion_saas_pago_por_uso_licencias_servicios}` | `{pasarelas_de_pago_o_gestion_de_suscripciones}` |
+| **1. Socios Clave (KP)** | Sin alianzas ni proveedores comerciales definidos. | Dependencias de software declaradas; sin integración con registros oficiales ni servicios externos de OCR. |
+| **2. Actividades Clave (KA)** | Carga, extracción conservadora, revisión humana y registro. | Endpoints de documentos y vehículos; requiere_revision señala revisión necesaria, pero no hay flujo de aprobación implementado. |
+| **3. Recursos Clave (KR)** | Código, reglas de extracción, pruebas y almacenamiento local. | Python, FastAPI, pypdf, modelos de dominio, archivos con UUID y SQLite. |
+| **4. Propuesta de Valor (VP)** | Facilitar el registro sin completar automáticamente valores dudosos. | Seis campos propuestos; null cuando no hay un candidato válido único y requiere_revision = true. |
+| **5. Relación con Clientes (CR)** | Evaluación técnica del MVP; soporte comercial por definir. | Swagger para probar la API; sin notificaciones, webhooks ni sistema de soporte. |
+| **6. Canales de Distribución (CH)** | API HTTP local. | /api/v1/documents, /api/v1/vehicles y Swagger en /api/v1/docs con configuración predeterminada. Sin frontend dedicado. |
+| **7. Segmentos de Clientes (CS)** | Operadores que transcriben títulos automotores; segmentación comercial pendiente. | Validaciones comunes, sin usuarios ni permisos por roles. |
+| **8. Estructura de Costos (CS)** | Ejecución local, disco y mantenimiento; costos sin cuantificar. | SQLite y archivos locales, sin infraestructura cloud ni medición de consumo facturable integrada. |
+| **9. Fuentes de Ingresos (RS)** | Modelo de ingresos y precios no definidos. | Sin pagos, suscripciones ni facturación. |
 
 ### 2.2. Organigrama Operativo / Gobernanza de Agentes IA (Opcional)
-* **`agente-orquestador` / `agente-lead`:** Gobernanza general, alineación técnica y resolución de conflictos entre módulos.
-* **`agente-core-dominio`:** Supervisión de la lógica de negocio pura, entidades y reglas de dominio.
-* **`agente-integraciones-api`:** Gestión de endpoints, controladores, validación de schemas y contratos externos.
-* **`agente-persistencia-datos`:** Modelado de datos, migraciones, optimización de queries y repositorios.
-* **`agente-qa-calidad`:** Validación continua del Guantelete de Restricciones (`test_architecture.py`), Pyright y tests.
+* **Coordinación técnica:** La gobernanza corresponde al equipo humano. Codex se usa como herramienta de desarrollo asistido bajo supervisión humana; sus propuestas están sujetas a revisión, aprobación de cambios y validación de resultados por el equipo. No hay organigrama formal ni agentes IA operativos implementados en el MVP. Las responsabilidades del código se describen a continuación.
+* **Dominio y aplicación:** src/domain define registros y validaciones; src/application propone campos a partir de texto sin I/O.
+* **API e infraestructura:** src/infrastructure contiene routers FastAPI, extracción de PDF, almacenamiento local, repositorio SQLite y configuración.
+* **Calidad:** pytest ejecuta las pruebas unitarias, de integración y de endpoints; Ruff controla las reglas de lint y formato, y los tests arquitectónicos verifican las restricciones de arquitectura. Estas herramientas controlan la calidad y complementan la revisión humana. Sus resultados deben verificarse al ejecutarlas; no equivalen a certificación ni sustituyen la aprobación del equipo.
+* **Trazabilidad y colaboración:** Git/GitHub y los commits se usan para la trazabilidad, la colaboración y el registro de la evolución del proyecto.
+* **Trabajo en desarrollo:** OCR con Tesseract en preparación, sin integración funcional en los endpoints actuales.
 
 ### 2.3. Escalera de Valor / Modelo de Conversión
-* **Nivel de Entrada (*Lead Magnet* / Tier Gratuito):** `{ej_Demo_publica_tier_gratuito_o_herramienta_de_evaluacion}`.
-* **Servicio Core (*Core Offering*):** `{ej_Plataforma_principal_funcionalidades_core_o_servicio_profesional}`.
-* **Nivel Avanzado (*Enterprise* / Retención):** `{ej_SLA_dedicado_analitica_avanzada_soporte_24_7}`.
+* **Nivel de Entrada (*Lead Magnet* / Tier Gratuito):** Evaluación local por Swagger con documentos sintéticos; sin demo pública ni plan gratuito comercial definido.
+* **Servicio Core (*Core Offering*):** Implementados: carga local, extracción de texto de PDF, propuesta conservadora de campos y alta/consulta de registros completos en SQLite. La propuesta no se guarda automáticamente y requiere revisión humana.
+* **Nivel Avanzado (*Enterprise* / Retención):** Sin oferta empresarial ni SLA definidos. OCR con Tesseract en preparación. Como evolución futura se contempla OCR de imágenes y PDFs escaneados, procesamiento masivo de documentos, herramientas de revisión, controles de acceso, trazabilidad y analítica de resultados.
 
 ---
 
