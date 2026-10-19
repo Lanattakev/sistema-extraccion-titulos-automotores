@@ -9,6 +9,8 @@ dependencies = [
     "uvicorn[standard]>=0.31.0",
     "pydantic>=2.9.0",
     "pydantic-settings>=2.5.0",
+    "pytesseract==0.3.13",
+    "Pillow",
 ]
 
 [project.optional-dependencies]

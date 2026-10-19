@@ -6,9 +6,11 @@ from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
+from PIL import Image
 from pypdf import PdfWriter
 from pypdf.generic import DictionaryObject, NameObject, StreamObject
 
+from src.infrastructure import image_text_extraction as ocr
 from src.infrastructure.persistence import local_document_storage as storage
 from src.main import create_app
 
@@ -120,10 +122,10 @@ def test_extract_missing_document(client, document_id):
     assert response.status_code == 404
 
 
-def test_extract_non_pdf(client):
+def test_extract_invalid_image(client):
     document = upload_for_extraction(client, b"image", "foto.png")
     response = client.post(f"/api/v1/documents/{document['id_documento']}/extract-text")
-    assert response.status_code == 415
+    assert response.status_code == 400
 
 
 def test_extract_pdf_without_text(client):
@@ -190,7 +192,7 @@ def test_extract_fields_does_not_save_vehicle(client, monkeypatch):
 @pytest.mark.parametrize("content,name,expected", [
     (make_pdf(), "vacio.pdf", 200),
     (b"invalid", "roto.pdf", 400),
-    (b"image", "foto.png", 415),
+    (b"image", "foto.png", 400),
 ])
 def test_extract_fields_handles_unreadable_text(client, content, name, expected):
     document = upload_for_extraction(client, content, name)
@@ -206,3 +208,104 @@ def test_extract_fields_handles_unreadable_text(client, content, name, expected)
 def test_extract_fields_missing_document(client):
     response = client.post("/api/v1/documents/inexistente/extract-fields")
     assert response.status_code == 404
+
+
+OCR_TEXT = (
+    "DOMINIO: AB123CD\nMARCA: TOYOTA\nMODELO: COROLLA\n"
+    "MOTOR: XYZ123\nCHASIS: ABC987\nMODELO AÑO: 2020"
+)
+
+
+def make_image(name):
+    output = BytesIO()
+    with Image.new("RGB", (100, 100), "white") as image:
+        image.save(output, format="PNG" if name.endswith(".png") else "JPEG")
+    return output.getvalue()
+
+
+@pytest.mark.parametrize("name", ["foto.jpg", "foto.jpeg", "foto.png"])
+def test_extract_image_text(client, monkeypatch, name):
+    calls = []
+
+    def fake_ocr(image, **kwargs):
+        calls.append((image.format, kwargs))
+        return OCR_TEXT
+
+    monkeypatch.setattr(ocr.pytesseract, "image_to_string", fake_ocr)
+    document = upload_for_extraction(client, make_image(name), name)
+    response = client.post(f"/api/v1/documents/{document['id_documento']}/extract-text")
+    assert response.status_code == 200
+    assert response.json()["texto_extraido"] == OCR_TEXT
+    assert response.json()["cantidad_caracteres"] == len(OCR_TEXT)
+    assert response.json()["requiere_ocr"] is False
+    settings = ocr.get_settings()
+    assert calls == [("PNG" if name.endswith(".png") else "JPEG", {
+        "lang": settings.TESSERACT_LANG, "timeout": settings.TESSERACT_TIMEOUT,
+    })]
+    assert ocr.pytesseract.pytesseract.tesseract_cmd == settings.TESSERACT_CMD
+
+
+@pytest.mark.parametrize("text", ["", " \n\t", "... | !!!"])
+def test_image_without_useful_text(client, monkeypatch, text):
+    monkeypatch.setattr(ocr.pytesseract, "image_to_string", lambda *args, **kwargs: text)
+    document = upload_for_extraction(client, make_image("foto.png"), "foto.png")
+    base = f"/api/v1/documents/{document['id_documento']}"
+    response = client.post(base + "/extract-text")
+    assert response.status_code == 200
+    assert response.json()["texto_extraido"] == ""
+    assert response.json()["cantidad_caracteres"] == 0
+    assert "no obtuvo texto util" in response.json()["mensaje"]
+    fields = client.post(base + "/extract-fields")
+    assert fields.status_code == 200
+    assert fields.json()["requiere_revision"] is True
+    assert all(fields.json()[field] is None for field in (
+        "patente", "marca", "modelo", "numero_motor", "numero_chasis", "anio",
+    ))
+
+
+def test_extract_image_fields_does_not_save(client, monkeypatch):
+    from src.infrastructure.persistence.sqlite_vehicle_repository import SQLiteVehicleRepository
+
+    def forbidden_save(*args, **kwargs):
+        pytest.fail("OCR must not save vehicles")
+
+    monkeypatch.setattr(SQLiteVehicleRepository, "save", forbidden_save)
+    monkeypatch.setattr(ocr.pytesseract, "image_to_string", lambda *args, **kwargs: OCR_TEXT)
+    document = upload_for_extraction(client, make_image("foto.png"), "foto.png")
+    before_files = {p.name: p.read_bytes() for p in storage.UPLOAD_DIRECTORY.iterdir()}
+    before_vehicles = client.app.state.vehicle_repository.list_all()
+    response = client.post(f"/api/v1/documents/{document['id_documento']}/extract-fields")
+    assert response.status_code == 200
+    assert response.json() == {
+        "id_documento": document["id_documento"], "patente": "AB123CD", "marca": "TOYOTA",
+        "modelo": "COROLLA", "numero_motor": "XYZ123", "numero_chasis": "ABC987",
+        "anio": 2020, "requiere_revision": True,
+    }
+    assert client.app.state.vehicle_repository.list_all() == before_vehicles
+    assert {p.name: p.read_bytes() for p in storage.UPLOAD_DIRECTORY.iterdir()} == before_files
+
+
+@pytest.mark.parametrize("endpoint", ["extract-text", "extract-fields"])
+def test_extract_unsupported_format(client, monkeypatch, endpoint):
+    document = upload_for_extraction(client, make_image("foto.png"), "foto.png")
+    metadata = storage.get_document(document["id_documento"])
+    metadata.tipo_archivo = "image/gif"
+    monkeypatch.setattr(storage, "get_document", lambda document_id: metadata)
+    response = client.post(f"/api/v1/documents/{metadata.id_documento}/{endpoint}")
+    assert response.status_code == 415
+
+
+@pytest.mark.parametrize("error", [
+    ocr.pytesseract.TesseractNotFoundError(),
+    ocr.pytesseract.TesseractError(1, "OCR failed"),
+    RuntimeError("Tesseract process timeout"),
+])
+def test_ocr_failure_is_controlled(client, monkeypatch, error):
+    def fail_ocr(*args, **kwargs):
+        raise error
+
+    monkeypatch.setattr(ocr.pytesseract, "image_to_string", fail_ocr)
+    document = upload_for_extraction(client, make_image("foto.png"), "foto.png")
+    response = client.post(f"/api/v1/documents/{document['id_documento']}/extract-text")
+    assert response.status_code == 400
+    assert "No se pudo realizar OCR" in response.json()["detail"]

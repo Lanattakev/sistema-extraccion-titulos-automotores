@@ -34,6 +34,11 @@ class Settings(BaseSettings):
     # Base de Datos
     DATABASE_URL: str = Field(default="sqlite+aiosqlite:///./app.db")
 
+    # OCR local
+    TESSERACT_CMD: str = Field(default=r"C:\Program Files\Tesseract-OCR\tesseract.exe")
+    TESSERACT_LANG: str = Field(default="spa+eng")
+    TESSERACT_TIMEOUT: float = Field(default=30, gt=0)
+
 
 @lru_cache
 def get_settings() -> Settings:

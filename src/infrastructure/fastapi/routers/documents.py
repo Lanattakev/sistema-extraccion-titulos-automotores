@@ -5,6 +5,7 @@ from starlette.concurrency import run_in_threadpool
 from starlette.datastructures import UploadFile
 
 from src.application.title_field_extraction import ProposedVehicleFields, extract_title_fields
+from src.infrastructure.image_text_extraction import extract_image_text
 from src.infrastructure.pdf_text_extraction import ExtractedText, extract_pdf_text
 from src.infrastructure.persistence import local_document_storage as storage
 from src.infrastructure.persistence.local_document_storage import (
@@ -31,10 +32,16 @@ def extract_document_text(id_documento: str) -> ExtractedText:
         raise HTTPException(status_code=404, detail="Documento no encontrado.") from error
     except InvalidDocument as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
-    if document.tipo_archivo != "application/pdf":
-        raise HTTPException(status_code=415, detail="Solo se permite extraer texto de PDF.")
+    extractors = {
+        "application/pdf": extract_pdf_text,
+        "image/jpeg": extract_image_text,
+        "image/png": extract_image_text,
+    }
+    extractor = extractors.get(document.tipo_archivo)
+    if extractor is None:
+        raise HTTPException(status_code=415, detail="Solo se admiten PDF, JPG/JPEG y PNG.")
     try:
-        return extract_pdf_text(document, storage.UPLOAD_DIRECTORY / document.nombre_interno)
+        return extractor(document, storage.UPLOAD_DIRECTORY / document.nombre_interno)
     except InvalidDocument as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
