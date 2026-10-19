@@ -4,27 +4,28 @@ Backend para cargar títulos automotores, proponer sus datos principales y regis
 
 ## Estado del MVP
 
-MVP local con FastAPI, Swagger y persistencia SQLite. La extracción funciona sobre PDF con texto extraíble. **El OCR con Tesseract está en preparación y no está terminado ni integrado en la API.** Cargar una imagen no implica extraer su texto.
+MVP local con FastAPI, Swagger y persistencia SQLite. La extracción funciona sobre PDF con texto extraíble mediante pypdf y sobre JPG/JPEG/PNG mediante OCR local con Tesseract, pytesseract y Pillow. El OCR de imágenes está implementado y probado con mocks; esto no acredita precisión sobre documentos reales. El OCR para PDF escaneado sigue pendiente.
 
 ## Funcionalidades implementadas
 
 - Carga de un archivo PDF, JPG/JPEG o PNG por solicitud, de hasta 10 MiB, con validación de nombre, extensión y contenido no vacío.
 - Almacenamiento en `uploads/` con nombre interno UUID y metadatos JSON.
 - Extracción de texto de PDF con `pypdf`. Un PDF sin texto devuelve `requiere_ocr = true`; no ejecuta OCR. Los PDF inválidos o cifrados producen un error.
-- Propuesta de `patente`, `marca`, `modelo`, `numero_motor`, `numero_chasis` y `anio` mediante etiquetas y reglas. Campos ausentes, inválidos o sin un candidato válido único quedan en `null`; las propuestas llevan `requiere_revision = true`.
+- OCR local de JPG/JPEG/PNG cargados, separado de FastAPI. Si no obtiene texto útil, devuelve texto vacío y una respuesta controlada; los campos quedan en `null`. Las imágenes ilegibles y los errores de Tesseract producen un error controlado.
+- Propuesta de `patente`, `marca`, `modelo`, `numero_motor`, `numero_chasis` y `anio` mediante el parser existente de etiquetas y reglas, reutilizado para texto de PDF y de OCR de imágenes. Campos ausentes, inválidos o sin un candidato válido único quedan en `null`; las propuestas llevan `requiere_revision = true`.
 - Alta y consulta de registros completos en SQLite, con UUID, fecha de ingreso, archivo de origen y marca de revisión.
 - Tests unitarios, de integración, de endpoints y de restricciones arquitectónicas.
 
-La propuesta de campos no guarda automáticamente un vehículo. El operador debe revisar y completar los datos antes del alta; esta exige los seis campos y `archivo_origen`. Este último es una referencia textual: el alta no comprueba que corresponda a un documento cargado. Los ingresos se crean con `requiere_revision = true`; todavía no hay endpoint de aprobación.
+La propuesta de campos, incluida la obtenida por OCR, no guarda automáticamente un `VehicleRecord`. El operador debe revisar y completar los datos antes del alta; esta exige los seis campos y `archivo_origen`. Este último es una referencia textual: el alta no comprueba que corresponda a un documento cargado. Los ingresos se crean con `requiere_revision = true`; todavía no hay endpoint de aprobación.
 
 ## Funcionalidades pendientes
 
-- **En preparación:** OCR con Tesseract para imágenes y PDF escaneados.
+- **Pendiente:** OCR para PDF escaneado; los PDF siguen usando únicamente pypdf.
 - **Futuras, sin implementación actual:** flujo de corrección y aprobación, vinculación verificada entre documento y registro, interfaz dedicada de revisión y controles de autenticación y autorización.
 
 ## Tecnologías
 
-Python 3.10 o superior, FastAPI, Uvicorn, Pydantic v2, pydantic-settings, python-multipart y pypdf. Persistencia con `sqlite3` de la biblioteca estándar; aunque la URL predeterminada incluye `sqlite+aiosqlite`, el repositorio actual utiliza `sqlite3` síncrono. Pruebas con pytest, pytest-asyncio y HTTPX; análisis estático con Ruff.
+Python 3.10 o superior, FastAPI, Uvicorn, Pydantic v2, pydantic-settings, python-multipart, pypdf, pytesseract 0.3.13 y Pillow. El OCR de imágenes utiliza el ejecutable local de Tesseract. Persistencia con `sqlite3` de la biblioteca estándar; aunque la URL predeterminada incluye `sqlite+aiosqlite`, el repositorio actual utiliza `sqlite3` síncrono. Pruebas con pytest, pytest-asyncio y HTTPX; análisis estático con Ruff.
 
 ## Instalación y ejecución local
 
@@ -44,9 +45,9 @@ source .venv/bin/activate
 python -m pip install -r requirements-dev.txt
 ```
 
-`requirements-dev.txt` incluye las dependencias de ejecución y las herramientas de calidad. Para instalar únicamente las de ejecución, usar `python -m pip install -r requirements.txt`. Estos archivos incluyen las dependencias de carga y extracción de PDF necesarias para el MVP.
+`requirements-dev.txt` incluye las dependencias de ejecución y las herramientas de calidad. Para instalar únicamente las de ejecución, usar `python -m pip install -r requirements.txt`. Estos archivos incluyen las dependencias de carga, extracción de PDF y OCR de imágenes necesarias para el MVP. El ejecutable de Tesseract y sus idiomas deben estar instalados por separado.
 
-No hace falta un archivo `.env` para la ejecución predeterminada. La configuración se carga desde variables de entorno o un `.env` local mediante `src/infrastructure/settings/config.py`.
+No hace falta un archivo `.env` para la ejecución predeterminada. La configuración se carga desde variables de entorno o un `.env` local mediante `src/infrastructure/settings/config.py`. Para OCR, `TESSERACT_CMD` tiene como valor predeterminado `C:\Program Files\Tesseract-OCR\tesseract.exe`, `TESSERACT_LANG` es `spa+eng` y `TESSERACT_TIMEOUT` es 30 segundos. La ruta debe ajustarse si Tesseract está instalado en otra ubicación; los idiomas configurados deben estar disponibles localmente.
 
 ```bash
 uvicorn src.main:app --reload --host 127.0.0.1 --port 8000
@@ -65,13 +66,13 @@ SQLite crea la tabla al iniciar la aplicación y usa `app.db` en el directorio d
 | Método y ruta predeterminada | Operación |
 | --- | --- |
 | `POST /api/v1/documents` | Cargar un documento en el campo multipart `file` |
-| `POST /api/v1/documents/{id_documento}/extract-text` | Extraer texto de un PDF cargado |
-| `POST /api/v1/documents/{id_documento}/extract-fields` | Proponer los seis campos desde el texto del PDF |
+| `POST /api/v1/documents/{id_documento}/extract-text` | Extraer texto de un PDF con pypdf o de JPG/JPEG/PNG con OCR local |
+| `POST /api/v1/documents/{id_documento}/extract-fields` | Proponer los seis campos desde texto de PDF o de OCR de imágenes |
 | `POST /api/v1/vehicles` | Registrar datos completos revisados por el operador |
 | `GET /api/v1/vehicles` | Listar ingresos |
 | `GET /api/v1/vehicles/{id}` | Consultar un ingreso por su identificador |
 
-Para probar el flujo, usar únicamente un PDF sintético con texto: cargarlo, conservar su `id_documento`, solicitar la propuesta, revisar los campos y realizar el alta por separado. La extracción sobre imágenes devuelve HTTP 415 en el estado actual.
+Para probar el flujo, usar un PDF sintético con texto o una imagen sintética JPG/JPEG/PNG: cargar el archivo, conservar su `id_documento`, solicitar la propuesta, revisar los campos y realizar el alta por separado. Las propuestas mantienen `requiere_revision = true`. Un PDF sin texto extraíble devuelve `requiere_ocr = true`, sin ejecutar OCR para PDF escaneado.
 
 ## Verificaciones
 
@@ -97,6 +98,7 @@ src/
     fastapi/routers/               # Documentos y vehículos
     persistence/                   # Archivos locales y SQLite
     pdf_text_extraction.py         # Extracción con pypdf
+    image_text_extraction.py       # OCR local con pytesseract y Pillow
     settings/                      # Configuración y logging
 tests/
   unit/
@@ -122,6 +124,6 @@ Los UUID evitan usar el nombre original como ruta, pero los metadatos conservan 
 
 ## Roadmap breve
 
-1. Completar e integrar OCR con Tesseract, validándolo con documentos sintéticos.
+1. Incorporar OCR para PDF escaneado; el OCR de JPG/JPEG/PNG ya está implementado y probado con mocks.
 2. Incorporar revisión, corrección y aprobación explícitas, junto con vinculación documental verificada.
 3. Definir controles de acceso, retención de documentos y condiciones de despliegue antes de habilitar uso compartido.

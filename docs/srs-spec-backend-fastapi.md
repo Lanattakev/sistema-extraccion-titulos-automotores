@@ -19,13 +19,13 @@
 * **User Persona (Operador / Usuario Final):** Operador que carga un título, revisa los campos propuestos y registra datos completos mediante la API o Swagger.
 * **Alcance Geográfico & Modalidad:** MVP local con archivos en disco y SQLite. La extracción reconoce formatos de patentes argentinas; no se declara cobertura internacional ni despliegue cloud.
 
-* **Fuera de Alcance (*Out of Scope*):** OCR operativo, aprobación automática, interfaz dedicada de revisión, autenticación, roles e integración con registros oficiales. OCR con Tesseract en preparación, no terminado.
+* **Fuera de Alcance (*Out of Scope*):** OCR para PDF escaneado, aprobación automática, interfaz dedicada de revisión, autenticación, roles e integración con registros oficiales. El OCR local de JPG/JPEG/PNG con Tesseract ya está implementado.
 
 ### 1.2. Pilares de Valor de la Solución
 | Pilar | Enfoque | Implementación en este Sistema |
 | :--- | :--- | :--- |
-| **1. Activos & Entorno Operativo** | Infraestructura física, dispositivos, hardware o fuentes de datos base. | Carga de PDF, JPG/JPEG y PNG de hasta 10 MiB por archivo, con UUID interno y metadatos JSON en disco local. Las imágenes se almacenan; no se procesan con OCR. |
-| **2. Software & Lógica de Negocio** | Captura, procesamiento en tiempo real, persistencia y APIs. | FastAPI y Swagger; extracción de texto de PDF con pypdf y propuesta de patente, marca, modelo, motor, chasis y año. Campos ausentes, inválidos o contradictorios quedan en null; requiere_revision es true. Alta y consulta de datos completos en SQLite, separadas de la extracción. |
+| **1. Activos & Entorno Operativo** | Infraestructura física, dispositivos, hardware o fuentes de datos base. | Carga de PDF, JPG/JPEG y PNG de hasta 10 MiB por archivo, con UUID interno y metadatos JSON en disco local. Las imágenes JPG/JPEG/PNG se almacenan y pueden procesarse con OCR local mediante Tesseract, pytesseract y Pillow. |
+| **2. Software & Lógica de Negocio** | Captura, procesamiento en tiempo real, persistencia y APIs. | FastAPI y Swagger; extracción de texto de PDF con pypdf y OCR local de JPG/JPEG/PNG con Tesseract, pytesseract y Pillow. Ambos reutilizan el parser existente para proponer patente, marca, modelo, motor, chasis y año. Campos ausentes, inválidos o contradictorios quedan en null; requiere_revision es true. Alta y consulta de datos completos en SQLite, separadas de la extracción. La propuesta no guarda automáticamente VehicleRecord. Si el OCR no obtiene texto útil, devuelve texto vacío y campos null mediante una respuesta controlada. |
 | **3. Impacto Económico & ROI** | Optimización de costos, generación de ingresos o eficiencia operativa. | Se busca reducir transcripción manual y facilitar la revisión humana. No hay mediciones documentadas de ahorro, precisión, tiempos ni retorno económico. |
 
 ### 1.3. Coordinación Operativa, Roles & Seguridad
@@ -42,7 +42,7 @@
 | :--- | :--- | :--- |
 | **1. Socios Clave (KP)** | Sin alianzas ni proveedores comerciales definidos. | Dependencias de software declaradas; sin integración con registros oficiales ni servicios externos de OCR. |
 | **2. Actividades Clave (KA)** | Carga, extracción conservadora, revisión humana y registro. | Endpoints de documentos y vehículos; requiere_revision señala revisión necesaria, pero no hay flujo de aprobación implementado. |
-| **3. Recursos Clave (KR)** | Código, reglas de extracción, pruebas y almacenamiento local. | Python, FastAPI, pypdf, modelos de dominio, archivos con UUID y SQLite. |
+| **3. Recursos Clave (KR)** | Código, reglas de extracción, pruebas y almacenamiento local. | Python, FastAPI, pypdf, Tesseract, pytesseract, Pillow, modelos de dominio, archivos con UUID y SQLite. |
 | **4. Propuesta de Valor (VP)** | Facilitar el registro sin completar automáticamente valores dudosos. | Seis campos propuestos; null cuando no hay un candidato válido único y requiere_revision = true. |
 | **5. Relación con Clientes (CR)** | Evaluación técnica del MVP; soporte comercial por definir. | Swagger para probar la API; sin notificaciones, webhooks ni sistema de soporte. |
 | **6. Canales de Distribución (CH)** | API HTTP local. | /api/v1/documents, /api/v1/vehicles y Swagger en /api/v1/docs con configuración predeterminada. Sin frontend dedicado. |
@@ -53,15 +53,16 @@
 ### 2.2. Organigrama Operativo / Gobernanza de Agentes IA (Opcional)
 * **Coordinación técnica:** La gobernanza corresponde al equipo humano. Codex se usa como herramienta de desarrollo asistido bajo supervisión humana; sus propuestas están sujetas a revisión, aprobación de cambios y validación de resultados por el equipo. No hay organigrama formal ni agentes IA operativos implementados en el MVP. Las responsabilidades del código se describen a continuación.
 * **Dominio y aplicación:** src/domain define registros y validaciones; src/application propone campos a partir de texto sin I/O.
-* **API e infraestructura:** src/infrastructure contiene routers FastAPI, extracción de PDF, almacenamiento local, repositorio SQLite y configuración.
+* **API e infraestructura:** src/infrastructure contiene routers FastAPI, extracción de PDF con pypdf, OCR de imágenes separado de FastAPI, almacenamiento local, repositorio SQLite y configuración.
 * **Calidad:** pytest ejecuta las pruebas unitarias, de integración y de endpoints; Ruff controla las reglas de lint y formato, y los tests arquitectónicos verifican las restricciones de arquitectura. Estas herramientas controlan la calidad y complementan la revisión humana. Sus resultados deben verificarse al ejecutarlas; no equivalen a certificación ni sustituyen la aprobación del equipo.
 * **Trazabilidad y colaboración:** Git/GitHub y los commits se usan para la trazabilidad, la colaboración y el registro de la evolución del proyecto.
-* **Trabajo en desarrollo:** OCR con Tesseract en preparación, sin integración funcional en los endpoints actuales.
+* **OCR implementado y validación:** OCR local de JPG/JPEG/PNG con Tesseract, pytesseract y Pillow, integrado en extract-text y extract-fields. Reutiliza el parser existente de los seis campos, mantiene requiere_revision = true y no guarda automáticamente VehicleRecord. Las pruebas con mocks cubren imágenes con y sin texto, extracción de campos y errores; no acreditan precisión sobre documentos reales. La ruta del ejecutable, los idiomas y el tiempo límite se centralizan en Settings.
+* **Trabajo pendiente:** OCR para PDF escaneado; los PDF siguen usando únicamente pypdf.
 
 ### 2.3. Escalera de Valor / Modelo de Conversión
 * **Nivel de Entrada (*Lead Magnet* / Tier Gratuito):** Evaluación local por Swagger con documentos sintéticos; sin demo pública ni plan gratuito comercial definido.
-* **Servicio Core (*Core Offering*):** Implementados: carga local, extracción de texto de PDF, propuesta conservadora de campos y alta/consulta de registros completos en SQLite. La propuesta no se guarda automáticamente y requiere revisión humana.
-* **Nivel Avanzado (*Enterprise* / Retención):** Sin oferta empresarial ni SLA definidos. OCR con Tesseract en preparación. Como evolución futura se contempla OCR de imágenes y PDFs escaneados, procesamiento masivo de documentos, herramientas de revisión, controles de acceso, trazabilidad y analítica de resultados.
+* **Servicio Core (*Core Offering*):** Implementados: carga local, extracción de texto de PDF con pypdf, OCR local de JPG/JPEG/PNG con Tesseract, pytesseract y Pillow, y propuesta conservadora de los seis campos mediante el parser existente y alta/consulta de registros completos en SQLite. La propuesta mantiene requiere_revision = true, no guarda automáticamente VehicleRecord y requiere revisión humana.
+* **Nivel Avanzado (*Enterprise* / Retención):** Sin oferta empresarial ni SLA definidos. El OCR local de JPG/JPEG/PNG está implementado y probado con mocks. Como evolución futura se contempla OCR para PDF escaneado, procesamiento masivo de documentos, herramientas de revisión, controles de acceso, trazabilidad y analítica de resultados.
 
 ---
 
