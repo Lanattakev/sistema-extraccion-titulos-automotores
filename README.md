@@ -13,14 +13,17 @@ MVP local con FastAPI, Swagger y persistencia SQLite. La extracción funciona so
 - Extracción de texto de PDF con `pypdf` primero. Si el parser existente reconoce al menos uno de los seis campos, se usa ese texto sin OCR. Si no reconoce ninguno, incluso cuando hay texto auxiliar de impresión, se renderizan las páginas con `pypdfium2`, se aplica Tesseract y se une el texto en orden. Si el OCR no obtiene texto útil, la respuesta queda vacía con `requiere_ocr = true`. Los PDF inválidos o cifrados producen un error.
 - OCR local de JPG/JPEG/PNG cargados, separado de FastAPI. Si no obtiene texto útil, devuelve texto vacío y una respuesta controlada; los campos quedan en `null`. Las imágenes ilegibles y los errores de Tesseract producen un error controlado.
 - Propuesta de `patente`, `marca`, `modelo`, `numero_motor`, `numero_chasis` y `anio` mediante el parser existente de etiquetas y reglas, reutilizado para texto directo de PDF y texto de OCR de imágenes o páginas PDF. Campos ausentes, inválidos o sin un candidato válido único quedan en `null`; las propuestas llevan `requiere_revision = true`.
+- Confirmación humana mediante `POST /api/v1/documents/{id_documento}/confirm`: recibe los seis campos revisados/corregidos, valida mediante `VehicleRecord`, toma el nombre original del documento como `archivo_origen` y persiste un `VehicleIntake` en SQLite con `requiere_revision = false`. Devuelve el registro creado con HTTP 201. Las correcciones humanas prevalecen sobre OCR; la confirmación no vuelve a ejecutar la extracción.
 - Alta y consulta de registros completos en SQLite, con UUID, fecha de ingreso, archivo de origen y marca de revisión.
 - Tests unitarios, de integración, de endpoints y de restricciones arquitectónicas.
 
-La propuesta de campos, incluida la obtenida por OCR, no guarda automáticamente un `VehicleRecord`. El operador debe revisar y completar los datos antes del alta; esta exige los seis campos y `archivo_origen`. Este último es una referencia textual: el alta no comprueba que corresponda a un documento cargado. Los ingresos se crean con `requiere_revision = true`; todavía no hay endpoint de aprobación.
+`extract-fields` propone los seis campos con `requiere_revision = true` y no guarda automáticamente un `VehicleRecord`. El usuario revisa/corrige esos campos y los envía a `/confirm`, que verifica la existencia del documento y obtiene su nombre original como `archivo_origen`; este valor no se recibe del usuario. Documento inexistente devuelve HTTP 404 y datos inválidos HTTP 422. El `VehicleIntake` confirmado se guarda y devuelve con `requiere_revision = false`.
+
+El alta independiente `POST /api/v1/vehicles` conserva su comportamiento: exige los seis campos y `archivo_origen` como referencia textual, no verifica un documento cargado y crea ingresos con `requiere_revision = true`.
 
 ## Funcionalidades pendientes
 
-- **Futuras, sin implementación actual:** flujo de corrección y aprobación, vinculación verificada entre documento y registro, interfaz dedicada de revisión y controles de autenticación y autorización.
+- **Futuras, sin implementación actual:** interfaz dedicada de revisión y controles de autenticación y autorización. La revisión/corrección y confirmación ya pueden realizarse mediante la API o Swagger; todavía no hay frontend dedicado.
 
 ## Tecnologías
 
@@ -67,11 +70,12 @@ SQLite crea la tabla al iniciar la aplicación y usa `app.db` en el directorio d
 | `POST /api/v1/documents` | Cargar un documento en el campo multipart `file` |
 | `POST /api/v1/documents/{id_documento}/extract-text` | Extraer texto de PDF con pypdf primero y fallback OCR, o de JPG/JPEG/PNG con OCR local |
 | `POST /api/v1/documents/{id_documento}/extract-fields` | Proponer los seis campos desde texto directo de PDF o texto de OCR de imágenes y PDF |
-| `POST /api/v1/vehicles` | Registrar datos completos revisados por el operador |
+| `POST /api/v1/documents/{id_documento}/confirm` | Confirmar los seis campos revisados/corregidos y guardar el ingreso con `requiere_revision = false` |
+| `POST /api/v1/vehicles` | Alta independiente con `archivo_origen` enviado por el usuario y `requiere_revision = true` |
 | `GET /api/v1/vehicles` | Listar ingresos |
 | `GET /api/v1/vehicles/{id}` | Consultar un ingreso por su identificador |
 
-Para probar el flujo, usar un PDF sintético con texto, un PDF escaneado sintético o una imagen sintética JPG/JPEG/PNG: cargar el archivo, conservar su `id_documento`, solicitar la propuesta, revisar los campos y realizar el alta por separado. Las propuestas mantienen `requiere_revision = true`. Si el texto directo del PDF no aporta ningún campo válido al parser, se activa el fallback OCR. Un solo campo válido basta para conservar la extracción directa sin OCR; no se exige completar los seis campos.
+Para probar el flujo, usar un PDF sintético con texto, un PDF escaneado sintético o una imagen sintética JPG/JPEG/PNG: cargar el archivo, conservar su `id_documento`, solicitar la propuesta con `extract-fields`, revisar/corregir los seis campos y enviarlos a `POST /api/v1/documents/{id_documento}/confirm`. Las propuestas mantienen `requiere_revision = true`; el ingreso confirmado queda persistido con `requiere_revision = false`. Si el texto directo del PDF no aporta ningún campo válido al parser, se activa el fallback OCR. Un solo campo válido basta para conservar la extracción directa sin OCR; no se exige completar los seis campos.
 
 ## Verificaciones
 
@@ -124,5 +128,5 @@ Los UUID evitan usar el nombre original como ruta, pero los metadatos conservan 
 
 ## Roadmap breve
 
-1. Incorporar revisión, corrección y aprobación explícitas, junto con vinculación documental verificada.
+1. Incorporar una interfaz dedicada de revisión y confirmación sobre el flujo ya disponible en la API.
 2. Definir controles de acceso, retención de documentos y condiciones de despliegue antes de habilitar uso compartido.
