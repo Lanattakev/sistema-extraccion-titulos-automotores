@@ -12,13 +12,14 @@ from pypdf.generic import DictionaryObject, NameObject, StreamObject
 
 from src.infrastructure import image_text_extraction as ocr
 from src.infrastructure.persistence import local_document_storage as storage
+from src.infrastructure.settings.config import get_settings
 from src.main import create_app
 
 
 @pytest.fixture
 def client(monkeypatch, tmp_path):
     monkeypatch.setattr(storage, "UPLOAD_DIRECTORY", tmp_path / "uploads")
-    # Este endpoint no necesita inicializar el repositorio de vehiculos.
+    monkeypatch.setattr(get_settings(), "DATABASE_URL", f"sqlite:///{tmp_path / 'vehicles.db'}")
     with TestClient(create_app()) as test_client:
         yield test_client
 
@@ -421,3 +422,87 @@ def test_auxiliary_text_with_scanned_page_uses_ocr(client, monkeypatch, endpoint
             "modelo": "COROLLA", "numero_motor": "XYZ123", "numero_chasis": "ABC987",
             "anio": 2020, "requiere_revision": True,
         }
+
+
+@pytest.fixture
+def reviewed_fields():
+    return {
+        "patente": " cd456ef ", "marca": "Honda", "modelo": "Civic",
+        "numero_motor": "motor2", "numero_chasis": "chasis2", "anio": 2022,
+    }
+
+
+def test_confirm_document_saves_reviewed_fields(client, reviewed_fields):
+    document = upload_for_extraction(client, make_pdf("Marca: Ejemplo"), "titulo_original.pdf")
+    response = client.post(
+        f"/api/v1/documents/{document['id_documento']}/confirm", json=reviewed_fields,
+    )
+    assert response.status_code == 201
+    intake = response.json()
+    assert intake["archivo_origen"] == "titulo_original.pdf"
+    assert intake["vehicle"] == {
+        **reviewed_fields, "patente": "CD456EF", "numero_motor": "MOTOR2",
+        "numero_chasis": "CHASIS2",
+    }
+    assert intake["requiere_revision"] is False
+    assert intake["fecha_ingreso"]
+    assert str(UUID(intake["id_interno"])) == intake["id_interno"]
+    assert client.get(f"/api/v1/vehicles/{intake['id_interno']}").json() == intake
+    assert client.get("/api/v1/vehicles").json() == [intake]
+
+
+def test_confirm_keeps_human_corrections_instead_of_ocr(client, monkeypatch, reviewed_fields):
+    monkeypatch.setattr(ocr.pytesseract, "image_to_string", lambda *a, **kw: OCR_TEXT)
+    document = upload_for_extraction(client, make_image("foto.png"), "foto.png")
+    base = f"/api/v1/documents/{document['id_documento']}"
+    proposal = client.post(base + "/extract-fields")
+    assert proposal.status_code == 200
+    assert proposal.json()["patente"] == "AB123CD"
+    assert proposal.json()["requiere_revision"] is True
+    assert client.get("/api/v1/vehicles").json() == []
+
+    def forbidden_ocr(*args, **kwargs):
+        pytest.fail("Confirmation must not rerun OCR")
+
+    monkeypatch.setattr(ocr.pytesseract, "image_to_string", forbidden_ocr)
+    response = client.post(base + "/confirm", json=reviewed_fields)
+    assert response.status_code == 201
+    assert response.json()["requiere_revision"] is False
+    assert response.json()["vehicle"]["patente"] == "CD456EF"
+    assert response.json()["vehicle"]["marca"] == "Honda"
+    assert response.json()["vehicle"]["anio"] == 2022
+    assert client.get("/api/v1/vehicles").json() == [response.json()]
+    saved = client.app.state.vehicle_repository.get_by_id(response.json()["id_interno"])
+    assert saved.requiere_revision is False
+
+
+@pytest.mark.parametrize("document_id", ["missing", "00000000-0000-0000-0000-000000000000"])
+def test_confirm_missing_document(client, reviewed_fields, document_id):
+    response = client.post(f"/api/v1/documents/{document_id}/confirm", json=reviewed_fields)
+    assert response.status_code == 404
+    assert client.get("/api/v1/vehicles").json() == []
+
+
+@pytest.mark.parametrize("field,value", [
+    ("patente", " "), ("marca", None), ("modelo", ""), ("numero_motor", " "),
+    ("numero_chasis", 42), ("anio", 0), ("anio", True), ("anio", "2020"),
+    ("archivo_origen", "fake.pdf"), ("requiere_revision", False),
+])
+def test_confirm_invalid_fields_do_not_save(client, reviewed_fields, field, value):
+    document = upload_for_extraction(client, make_pdf())
+    response = client.post(
+        f"/api/v1/documents/{document['id_documento']}/confirm",
+        json={**reviewed_fields, field: value},
+    )
+    assert response.status_code == 422
+    assert client.get("/api/v1/vehicles").json() == []
+
+
+def test_confirm_requires_all_six_fields(client, reviewed_fields):
+    document = upload_for_extraction(client, make_pdf())
+    del reviewed_fields["anio"]
+    response = client.post(
+        f"/api/v1/documents/{document['id_documento']}/confirm", json=reviewed_fields,
+    )
+    assert response.status_code == 422
+    assert client.get("/api/v1/vehicles").json() == []

@@ -5,6 +5,8 @@ from starlette.concurrency import run_in_threadpool
 from starlette.datastructures import UploadFile
 
 from src.application.title_field_extraction import ProposedVehicleFields, extract_title_fields
+from src.domain.vehicle_record import VehicleIntake
+from src.infrastructure.fastapi.routers.vehicles import Repository, ReviewedVehicleRequest
 from src.infrastructure.image_text_extraction import extract_image_text
 from src.infrastructure.pdf_text_extraction import ExtractedText, extract_pdf_text
 from src.infrastructure.persistence import local_document_storage as storage
@@ -18,6 +20,29 @@ from src.infrastructure.persistence.local_document_storage import (
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
 
+@router.post("/{id_documento}/confirm", response_model=VehicleIntake,
+             status_code=status.HTTP_201_CREATED)
+def confirm_document(
+    id_documento: str, payload: ReviewedVehicleRequest, repository: Repository,
+) -> VehicleIntake:
+    document = get_document_or_error(id_documento)
+    intake = VehicleIntake(
+        vehicle=payload.to_vehicle(), archivo_origen=document.nombre_original,
+        requiere_revision=False,
+    )
+    repository.save(intake)
+    return intake
+
+
+def get_document_or_error(id_documento: str) -> Document:
+    try:
+        return storage.get_document(id_documento)
+    except FileNotFoundError as error:
+        raise HTTPException(status_code=404, detail="Documento no encontrado.") from error
+    except InvalidDocument as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+
 @router.post("/{id_documento}/extract-fields", response_model=ProposedVehicleFields)
 def extract_document_fields(id_documento: str) -> ProposedVehicleFields:
     extracted = extract_document_text(id_documento)
@@ -26,12 +51,7 @@ def extract_document_fields(id_documento: str) -> ProposedVehicleFields:
 
 @router.post("/{id_documento}/extract-text", response_model=ExtractedText)
 def extract_document_text(id_documento: str) -> ExtractedText:
-    try:
-        document = storage.get_document(id_documento)
-    except FileNotFoundError as error:
-        raise HTTPException(status_code=404, detail="Documento no encontrado.") from error
-    except InvalidDocument as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
+    document = get_document_or_error(id_documento)
     extractors = {
         "application/pdf": extract_pdf_text,
         "image/jpeg": extract_image_text,

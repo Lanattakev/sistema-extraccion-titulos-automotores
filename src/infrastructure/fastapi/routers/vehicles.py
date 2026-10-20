@@ -18,7 +18,7 @@ def get_vehicle_repository(request: Request) -> SQLiteVehicleRepository:
 Repository = Annotated[SQLiteVehicleRepository, Depends(get_vehicle_repository)]
 
 
-class CreateVehicleRequest(BaseModel):
+class ReviewedVehicleRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
     patente: str
@@ -27,11 +27,22 @@ class CreateVehicleRequest(BaseModel):
     numero_motor: str
     numero_chasis: str
     anio: int
+
+    def to_vehicle(self) -> VehicleRecord:
+        return VehicleRecord(**self.model_dump(exclude={"archivo_origen"}))
+
+    @model_validator(mode="after")
+    def validate_vehicle(self) -> "ReviewedVehicleRequest":
+        self.to_vehicle()
+        return self
+
+
+class CreateVehicleRequest(ReviewedVehicleRequest):
     archivo_origen: str
 
     def to_intake(self) -> VehicleIntake:
         return VehicleIntake(
-            vehicle=VehicleRecord(**self.model_dump(exclude={"archivo_origen"})),
+            vehicle=self.to_vehicle(),
             archivo_origen=self.archivo_origen,
         )
 
