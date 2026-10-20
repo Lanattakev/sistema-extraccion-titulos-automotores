@@ -7,7 +7,7 @@ from uuid import UUID
 import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
-from pypdf import PdfWriter
+from pypdf import PdfReader, PdfWriter
 from pypdf.generic import DictionaryObject, NameObject, StreamObject
 
 from src.infrastructure import image_text_extraction as ocr
@@ -105,13 +105,13 @@ def upload_for_extraction(client, content, name="documento.pdf"):
 
 
 def test_extract_pdf_text(client):
-    document = upload_for_extraction(client, make_pdf("Texto del documento"))
+    document = upload_for_extraction(client, make_pdf("Marca: Ejemplo"))
     response = client.post(f"/api/v1/documents/{document['id_documento']}/extract-text")
     assert response.status_code == 200
     data = response.json()
     assert data["id_documento"] == document["id_documento"]
     assert data["nombre_original"] == "documento.pdf"
-    assert data["texto_extraido"] == "Texto del documento"
+    assert data["texto_extraido"] == "Marca: Ejemplo"
     assert data["cantidad_caracteres"] == len(data["texto_extraido"])
     assert data["requiere_ocr"] is False
 
@@ -128,7 +128,8 @@ def test_extract_invalid_image(client):
     assert response.status_code == 400
 
 
-def test_extract_pdf_without_text(client):
+def test_extract_pdf_without_text(client, monkeypatch):
+    monkeypatch.setattr(ocr.pytesseract, "image_to_string", lambda *a, **kw: "")
     document = upload_for_extraction(client, make_pdf())
     response = client.post(f"/api/v1/documents/{document['id_documento']}/extract-text")
     assert response.status_code == 200
@@ -136,11 +137,11 @@ def test_extract_pdf_without_text(client):
     assert data["texto_extraido"] == ""
     assert data["cantidad_caracteres"] == 0
     assert data["requiere_ocr"] is True
-    assert "probablemente requiera OCR" in data["mensaje"]
+    assert "OCR no obtuvo texto util" in data["mensaje"]
 
 
 def test_extract_preserves_original(client):
-    content = make_pdf("Original intacto")
+    content = make_pdf("Marca: Original")
     document = upload_for_extraction(client, content)
     path = storage.UPLOAD_DIRECTORY / document["nombre_interno"]
     before = {p.name: p.read_bytes() for p in storage.UPLOAD_DIRECTORY.iterdir()}
@@ -194,7 +195,8 @@ def test_extract_fields_does_not_save_vehicle(client, monkeypatch):
     (b"invalid", "roto.pdf", 400),
     (b"image", "foto.png", 400),
 ])
-def test_extract_fields_handles_unreadable_text(client, content, name, expected):
+def test_extract_fields_handles_unreadable_text(client, monkeypatch, content, name, expected):
+    monkeypatch.setattr(ocr.pytesseract, "image_to_string", lambda *a, **kw: "")
     document = upload_for_extraction(client, content, name)
     response = client.post(f"/api/v1/documents/{document['id_documento']}/extract-fields")
     assert response.status_code == expected
@@ -309,3 +311,113 @@ def test_ocr_failure_is_controlled(client, monkeypatch, error):
     response = client.post(f"/api/v1/documents/{document['id_documento']}/extract-text")
     assert response.status_code == 400
     assert "No se pudo realizar OCR" in response.json()["detail"]
+
+
+@pytest.mark.parametrize("endpoint", ["extract-text", "extract-fields"])
+def test_scanned_pdf_fallback(client, monkeypatch, endpoint):
+    from src.infrastructure.persistence.sqlite_vehicle_repository import SQLiteVehicleRepository
+
+    def forbidden_save(*args, **kwargs):
+        pytest.fail("PDF OCR must not save vehicles")
+
+    monkeypatch.setattr(SQLiteVehicleRepository, "save", forbidden_save)
+    monkeypatch.setattr(ocr.pytesseract, "image_to_string", lambda *a, **kw: OCR_TEXT)
+    document = upload_for_extraction(client, make_pdf(), "escaneado.pdf")
+    before = {p.name: p.read_bytes() for p in storage.UPLOAD_DIRECTORY.iterdir()}
+    response = client.post(f"/api/v1/documents/{document['id_documento']}/{endpoint}")
+    assert response.status_code == 200
+    data = response.json()
+    if endpoint == "extract-text":
+        assert data["texto_extraido"] == OCR_TEXT
+        assert data["cantidad_caracteres"] == len(OCR_TEXT)
+        assert data["requiere_ocr"] is False
+    else:
+        assert data == {
+            "id_documento": document["id_documento"], "patente": "AB123CD", "marca": "TOYOTA",
+            "modelo": "COROLLA", "numero_motor": "XYZ123", "numero_chasis": "ABC987",
+            "anio": 2020, "requiere_revision": True,
+        }
+    assert {p.name: p.read_bytes() for p in storage.UPLOAD_DIRECTORY.iterdir()} == before
+
+
+def test_text_pdf_never_renders_or_uses_ocr(client, monkeypatch):
+    from src.infrastructure import pdf_text_extraction as pdf
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("PDF with text must use only pypdf")
+
+    monkeypatch.setattr(pdf.pdfium, "PdfDocument", forbidden)
+    monkeypatch.setattr(ocr.pytesseract, "image_to_string", forbidden)
+    document = upload_for_extraction(client, make_pdf("Dominio: AB123CD"))
+    response = client.post(f"/api/v1/documents/{document['id_documento']}/extract-fields")
+    assert response.status_code == 200
+    assert response.json()["patente"] == "AB123CD"
+    assert response.json()["requiere_revision"] is True
+
+
+def test_scanned_pdf_joins_pages_in_order(client, monkeypatch):
+    writer = PdfWriter()
+    for _ in range(2):
+        writer.add_blank_page(width=100, height=100)
+    output = BytesIO()
+    writer.write(output)
+    texts = iter(["DOMINIO: AB123CD", "MARCA: TOYOTA"])
+    monkeypatch.setattr(ocr.pytesseract, "image_to_string", lambda *a, **kw: next(texts))
+    document = upload_for_extraction(client, output.getvalue())
+    response = client.post(f"/api/v1/documents/{document['id_documento']}/extract-text")
+    assert response.status_code == 200
+    assert response.json()["texto_extraido"] == "DOMINIO: AB123CD\nMARCA: TOYOTA"
+
+
+@pytest.mark.parametrize("failure", ["render", "ocr"])
+def test_scanned_pdf_failure_is_controlled(client, monkeypatch, failure):
+    from src.infrastructure import pdf_text_extraction as pdf
+
+    def fail(*args, **kwargs):
+        raise RuntimeError("Rendering or OCR failed")
+
+    if failure == "render":
+        monkeypatch.setattr(pdf.pdfium, "PdfDocument", fail)
+    else:
+        monkeypatch.setattr(ocr.pytesseract, "image_to_string", fail)
+    document = upload_for_extraction(client, make_pdf())
+    response = client.post(f"/api/v1/documents/{document['id_documento']}/extract-fields")
+    assert response.status_code == 400
+
+
+@pytest.mark.parametrize("endpoint", ["extract-text", "extract-fields"])
+@pytest.mark.parametrize("auxiliary", [
+    "19/10/2026 titulo_impreso.pdf", "Dominio: ilegible", "Documento sin datos del vehiculo",
+])
+def test_auxiliary_text_with_scanned_page_uses_ocr(client, monkeypatch, endpoint, auxiliary):
+    # PDF con una imagen real y una capa de texto auxiliar que pypdf puede leer.
+    scanned = BytesIO()
+    with Image.new("RGB", (100, 100), "white") as image:
+        image.save(scanned, format="PDF")
+    reader = PdfReader(BytesIO(scanned.getvalue()))
+    page = reader.pages[0]
+    page.merge_page(PdfReader(BytesIO(make_pdf(auxiliary))).pages[0])
+    writer = PdfWriter()
+    writer.add_page(page)
+    output = BytesIO()
+    writer.write(output)
+    assert auxiliary in PdfReader(BytesIO(output.getvalue())).pages[0].extract_text()
+    calls = []
+
+    def fake_ocr(image, **kwargs):
+        calls.append(image.size)
+        return OCR_TEXT
+
+    monkeypatch.setattr(ocr.pytesseract, "image_to_string", fake_ocr)
+    document = upload_for_extraction(client, output.getvalue())
+    response = client.post(f"/api/v1/documents/{document['id_documento']}/{endpoint}")
+    assert response.status_code == 200
+    assert len(calls) == 1
+    if endpoint == "extract-text":
+        assert response.json()["texto_extraido"] == OCR_TEXT
+    else:
+        assert response.json() == {
+            "id_documento": document["id_documento"], "patente": "AB123CD", "marca": "TOYOTA",
+            "modelo": "COROLLA", "numero_motor": "XYZ123", "numero_chasis": "ABC987",
+            "anio": 2020, "requiere_revision": True,
+        }

@@ -6,3 +6,4 @@ python-multipart>=0.0.18
 pypdf>=6.20.1
 pytesseract==0.3.13
 Pillow
+pypdfium2
