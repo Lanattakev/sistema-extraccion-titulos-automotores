@@ -1,5 +1,8 @@
 """src/infrastructure/fastapi/routers/documents.py"""
 
+import logging
+from dataclasses import dataclass
+
 from fastapi import APIRouter, HTTPException, Request, status
 from starlette.concurrency import run_in_threadpool
 from starlette.datastructures import UploadFile
@@ -18,6 +21,64 @@ from src.infrastructure.persistence.local_document_storage import (
 )
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class BatchDocumentResult(ProposedVehicleFields):
+    id_documento: str | None = None
+    requiere_revision: bool = False
+    nombre_original: str = ""
+    fallo: bool = False
+    error: str | None = None
+
+
+@router.post("/batch", response_model=list[BatchDocumentResult], openapi_extra={
+    "requestBody": {"required": True, "content": {"multipart/form-data": {
+        "schema": {"type": "object", "required": ["files"], "properties": {
+            "files": {"type": "array", "items": {"type": "string", "format": "binary"}}
+        }}
+    }}}
+})
+async def create_document_batch(request: Request) -> list[BatchDocumentResult]:
+    async with request.form(max_files=100, max_fields=0) as form:
+        entries = form.multi_items()
+        if not entries or any(key != "files" for key, _ in entries):
+            raise HTTPException(status_code=422, detail="Debe enviar archivos en files.")
+        results = []
+        for _, file in entries:
+            results.append(await process_batch_file(file))
+        return results
+
+
+async def process_batch_file(file: UploadFile | str) -> BatchDocumentResult:
+    result = BatchDocumentResult(
+        nombre_original=(file.filename or "") if isinstance(file, UploadFile) else "",
+    )
+    try:
+        document = await store_uploaded_document(file)
+        result.id_documento = document.id_documento
+        proposal = await run_in_threadpool(extract_document_fields, document.id_documento)
+        return BatchDocumentResult(
+            id_documento=document.id_documento,
+            nombre_original=document.nombre_original,
+            patente=proposal.patente,
+            marca=proposal.marca,
+            modelo=proposal.modelo,
+            numero_motor=proposal.numero_motor,
+            numero_chasis=proposal.numero_chasis,
+            anio=proposal.anio,
+            requiere_revision=True,
+            fallo=False,
+            error=None,
+        )
+    except HTTPException as error:
+        result.error = str(error.detail)
+    except Exception:
+        logger.exception("Error procesando documento del lote: %s", result.nombre_original)
+        result.error = "No se pudo procesar el documento por un error interno."
+    result.fallo = True
+    return result
 
 
 @router.post("/{id_documento}/confirm", response_model=VehicleIntake,
@@ -76,15 +137,18 @@ async def create_document(request: Request) -> Document:
         entries = form.multi_items()
         if len(entries) != 1 or entries[0][0] != "file":
             raise HTTPException(status_code=422, detail="Debe enviar un solo archivo en file.")
-        file = entries[0][1]
-        if not isinstance(file, UploadFile):
-            raise HTTPException(status_code=422, detail="El archivo debe tener nombre.")
-        disposition = file.headers.get("content-disposition", "")
-        if "\\" in disposition or ":" in disposition:
-            raise HTTPException(status_code=400, detail="El nombre no puede contener rutas.")
-        try:
-            return await run_in_threadpool(save_document, file.file, file.filename or "")
-        except InvalidDocument as error:
-            raise HTTPException(status_code=400, detail=str(error)) from error
-        except DocumentTooLarge as error:
-            raise HTTPException(status_code=413, detail=str(error)) from error
+        return await store_uploaded_document(entries[0][1])
+
+
+async def store_uploaded_document(file: UploadFile | str) -> Document:
+    if not isinstance(file, UploadFile):
+        raise HTTPException(status_code=422, detail="El archivo debe tener nombre.")
+    disposition = file.headers.get("content-disposition", "")
+    if "\\" in disposition or ":" in disposition:
+        raise HTTPException(status_code=400, detail="El nombre no puede contener rutas.")
+    try:
+        return await run_in_threadpool(save_document, file.file, file.filename or "")
+    except InvalidDocument as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except DocumentTooLarge as error:
+        raise HTTPException(status_code=413, detail=str(error)) from error

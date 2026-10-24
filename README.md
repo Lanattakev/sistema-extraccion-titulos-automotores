@@ -126,6 +126,18 @@ Usar documentos sintéticos para desarrollo, pruebas y ejemplos. No publicar tí
 
 Los UUID evitan usar el nombre original como ruta, pero los metadatos conservan ese nombre. La carga valida extensión y tamaño; no incorpora análisis antivirus ni certifica el contenido por su extensión. La API actual carece de autenticación y autorización; su configuración predeterminada de CORS es permisiva. Mantener la ejecución de evaluación en localhost. No se declara cifrado de archivos o SQLite, política automatizada de retención ni preparación para producción.
 
+## Procesamiento por lote
+
+`POST /api/v1/documents/batch` recibe hasta 100 archivos PDF/JPG/JPEG/PNG en el campo multipart repetido `files`, con el mismo limite de 10 MiB por archivo del flujo individual.
+
+Devuelve HTTP 200 con una lista en el orden de carga. Cada elemento incluye `id_documento`, `nombre_original`, los seis campos propuestos, `requiere_revision`, `fallo` y `error`. Las propuestas tienen `requiere_revision = true`, `fallo = false` y `error = null`. Si un archivo falla, su elemento incluye `fallo = true`, el motivo en `error`, campos nulos y `requiere_revision = false`; los siguientes archivos se siguen procesando. `id_documento` es nulo si fallo el almacenamiento; si fallo la extraccion, conserva el identificador del documento almacenado.
+
+El lote almacena documentos y propone datos, sin guardar vehiculos. Cada propuesta se revisa y se confirma mediante `POST /api/v1/documents/{id_documento}/confirm`, como en el flujo individual. Una solicitud vacia o con campos distintos de `files` se rechaza; superar el limite de archivos rechaza la solicitud completa.
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/documents/batch -F "files=@titulo.pdf" -F "files=@foto.png"
+```
+
 ## Roadmap breve
 
 1. Incorporar una interfaz dedicada de revisión y confirmación sobre el flujo ya disponible en la API.

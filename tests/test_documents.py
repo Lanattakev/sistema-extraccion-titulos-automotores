@@ -506,3 +506,110 @@ def test_confirm_requires_all_six_fields(client, reviewed_fields):
     )
     assert response.status_code == 422
     assert client.get("/api/v1/vehicles").json() == []
+
+
+def post_batch(client, documents):
+    response = client.post("/api/v1/documents/batch", files=[
+        ("files", (name, content)) for name, content in documents
+    ])
+    assert response.status_code == 200
+    return response.json()
+
+
+@pytest.mark.parametrize("names", [
+    ["uno.pdf", "dos.pdf", "tres.pdf"],
+    ["titulo.pdf", "foto.jpg", "foto.JPEG", "foto.png"],
+])
+def test_batch_valid_documents(client, monkeypatch, names):
+    calls = []
+
+    def fake_ocr(*args, **kwargs):
+        calls.append(True)
+        return OCR_TEXT
+
+    monkeypatch.setattr(ocr.pytesseract, "image_to_string", fake_ocr)
+    documents = [
+        (name, make_pdf("Dominio: AB123CD") if name.endswith(".pdf") else make_image(name))
+        for name in names
+    ]
+    results = post_batch(client, documents)
+    assert [item["nombre_original"] for item in results] == names
+    assert len({item["id_documento"] for item in results}) == len(names)
+    assert len(calls) == sum(not name.endswith(".pdf") for name in names)
+    for item in results:
+        assert item["id_documento"] is not None
+        assert str(UUID(item["id_documento"])) == item["id_documento"]
+        assert item["fallo"] is False
+        assert item["error"] is None
+        assert item["requiere_revision"] is True
+        assert item["patente"] == "AB123CD"
+        proposal = client.post(
+            f"/api/v1/documents/{item['id_documento']}/extract-fields"
+        ).json()
+        assert all(item[key] == value for key, value in proposal.items())
+        assert storage.get_document(item["id_documento"]).nombre_original == item["nombre_original"]
+
+
+@pytest.mark.parametrize("name,content,stored", [
+    ("invalido.txt", b"texto", False),
+    ("roto.pdf", b"not a pdf", True),
+    ("vacio.png", b"", False),
+    ("grande.pdf", b"x" * (storage.MAX_DOCUMENT_BYTES + 1), False),
+], ids=["extension", "pdf-roto", "vacio", "demasiado-grande"])
+def test_batch_failure_between_valid_documents(client, name, content, stored):
+    results = post_batch(client, [
+        ("uno.pdf", make_pdf("Dominio: AB123CD")), (name, content),
+        ("tres.pdf", make_pdf("Dominio: CD456EF")),
+    ])
+    assert [item["fallo"] for item in results] == [False, True, False]
+    assert results[0]["patente"] == "AB123CD"
+    assert results[2]["patente"] == "CD456EF"
+    failed = results[1]
+    assert failed["nombre_original"] == name
+    assert bool(failed["id_documento"]) is stored
+    assert failed["error"]
+    assert failed["requiere_revision"] is False
+    assert all(failed[field] is None for field in (
+        "patente", "marca", "modelo", "numero_motor", "numero_chasis", "anio",
+    ))
+
+
+def test_batch_scanned_pdf_and_ocr_failure(client, monkeypatch):
+    def fake_ocr(image, **kwargs):
+        if image.format == "PNG":
+            raise RuntimeError("OCR timeout")
+        return OCR_TEXT
+
+    monkeypatch.setattr(ocr.pytesseract, "image_to_string", fake_ocr)
+    results = post_batch(client, [
+        ("escaneado.pdf", make_pdf()), ("foto.png", make_image("foto.png")),
+        ("texto.pdf", make_pdf("Dominio: CD456EF")),
+    ])
+    assert [item["fallo"] for item in results] == [False, True, False]
+    assert results[0]["numero_motor"] == "XYZ123"
+    assert "No se pudo realizar OCR" in results[1]["error"]
+
+
+def test_batch_does_not_save_until_confirmation(client, monkeypatch, reviewed_fields):
+    from src.infrastructure.persistence.sqlite_vehicle_repository import SQLiteVehicleRepository
+
+    def forbidden_save(*args, **kwargs):
+        pytest.fail("El lote no debe guardar vehiculos")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(SQLiteVehicleRepository, "save", forbidden_save)
+        results = post_batch(client, [
+            ("uno.pdf", make_pdf("Dominio: AB123CD")),
+            ("dos.pdf", make_pdf("Dominio: CD456EF")),
+        ])
+        assert client.get("/api/v1/vehicles").json() == []
+    response = client.post(
+        f"/api/v1/documents/{results[0]['id_documento']}/confirm", json=reviewed_fields,
+    )
+    assert response.status_code == 201
+    assert len(client.get("/api/v1/vehicles").json()) == 1
+
+
+def test_batch_empty_request(client):
+    response = client.post("/api/v1/documents/batch")
+    assert response.status_code == 422
