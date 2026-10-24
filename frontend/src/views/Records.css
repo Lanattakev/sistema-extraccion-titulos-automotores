@@ -1,0 +1,28 @@
+﻿.review-trigger { border: 0; padding: 0; background: transparent; border-radius: 20px; }
+.review-trigger:hover .status-badge { box-shadow: 0 0 0 2px var(--line); }
+.review-trigger:disabled { opacity: .65; }
+.document-review { padding: 25px; margin-top: 25px; border: 1px solid var(--line); border-radius: 10px; background: var(--subtle); }
+.document-review h4 { font-size: 16px; margin: 0; font-weight: 600; }
+.document-review p { color: var(--muted); font-size: 13px; line-height: 1.8; margin-top: 10px; }
+.document-review fieldset { margin: 24px 0; padding: 0; border: 0; min-width: 0; }
+.review-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.review-fields label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 8px; }
+.review-fields input { width: 100%; min-height: 44px; border: 1px solid var(--line); border-radius: 7px; padding: 10px 12px; font: inherit; color: var(--text); background: var(--surface); }
+.review-fields input:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+.review-actions { display: flex; gap: 14px; flex-wrap: wrap; }
+.review-actions .primary-button { margin: 0; }
+.registration-success { display: flex; align-items: flex-start; gap: 12px; background: var(--soft); color: var(--green); padding: 18px; border-radius: 8px; margin-top: 24px; line-height: 1.8; font-size: 14px; overflow-wrap: anywhere; }
+.registration-success svg { margin-top: 3px; }
+.registration-success p { margin-top: 5px; font-size: 13px; }
+.registered { color: #326b4c; background: #eef6f0; }
+[data-theme='dark'] .registered { color: #a3cfb3; background: #283f30; }
+.vehicle-feedback { padding: 12px 28px 28px; color: var(--muted); font-size: 14px; line-height: 1.8; }
+.batch-alert .text-button { margin-top: 12px; }
+@media (max-width: 680px) { .review-fields { grid-template-columns: 1fr; } .document-review { padding: 20px 16px; } }
+.pending-review { color: #806222; background: #fbf6e9; }
+.reviewed { color: #326b4c; background: #eef6f0; }
+[data-theme='dark'] .pending-review { color: #e0c27b; background: #3d3521; }
+[data-theme='dark'] .reviewed { color: #a3cfb3; background: #283f30; }
+.batch-result-heading input[type='checkbox'] { width: 18px; height: 18px; accent-color: var(--green); flex-shrink: 0; }
+.bulk-summary { padding: 0 28px 24px; font-size: 13px; line-height: 1.8; color: var(--muted); overflow-wrap: anywhere; }
+.bulk-summary progress { display: block; width: 100%; height: 9px; margin: 14px 0; accent-color: var(--green); }

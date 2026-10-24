@@ -1,4 +1,4 @@
-export function PageHeading({ title, description }: { title: string; description: string }) {
+export function PageHeading({ title, description, demo = true }: { title: string; description: string; demo?: boolean }) {
   return (
     <div className="page-intro">
       <div>
@@ -6,7 +6,7 @@ export function PageHeading({ title, description }: { title: string; description
         <h1 id="page-title" tabIndex={-1}>{title}</h1>
         <p>{description}</p>
       </div>
-      <span className="preview-badge">Vista de demostración</span>
+      {demo && <span className="preview-badge">Vista de demostración</span>}
     </div>
   )
 }
