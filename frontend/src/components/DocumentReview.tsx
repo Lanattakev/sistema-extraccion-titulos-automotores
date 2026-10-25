@@ -1,20 +1,22 @@
 import { useId, useState } from 'react'
 import type { FormEvent } from 'react'
 import type { BatchDocumentResult } from '../types/documents'
-import type { ConfirmationProps } from '../types/vehicles'
+import type { ConfirmationProps, ReviewedVehicle } from '../types/vehicles'
 
 const fields = [
   ['patente', 'Patente'], ['marca', 'Marca'], ['modelo', 'Modelo'],
   ['numero_motor', 'Número de motor'], ['numero_chasis', 'Número de chasis'], ['anio', 'Año'],
 ] as const
 
-export function DocumentReview({ result, confirmations, batchConfirmation, onMarkReviewed, onInvalidateReview, onConfirm, onClose }: ConfirmationProps & {
+export function DocumentReview({ result, confirmations, batchConfirmation, onMarkReviewed, onInvalidateReview, onConfirm, onClose, draft, onDraftChange }: ConfirmationProps & {
   result: BatchDocumentResult
+  draft?: ReviewedVehicle
+  onDraftChange: (fields: ReviewedVehicle) => void
   onClose: () => void
 }) {
   const id = useId()
   const reviewed = result.id_documento ? confirmations[result.id_documento]?.reviewed : undefined
-  const initial = reviewed ?? result
+  const initial = draft ?? reviewed ?? result
   const [values, setValues] = useState(() => ({
     patente: initial.patente ?? '', marca: initial.marca ?? '', modelo: initial.modelo ?? '',
     numero_motor: initial.numero_motor ?? '', numero_chasis: initial.numero_chasis ?? '',
@@ -42,7 +44,7 @@ export function DocumentReview({ result, confirmations, batchConfirmation, onMar
       <fieldset disabled={confirmation?.pending || !!confirmation?.registered || batchConfirmation?.running}>
         <legend className="sr-only">Datos del vehículo</legend>
         <div className="review-fields">
-          {fields.map(([key, label]) => <div key={key}><label htmlFor={`${id}-${key}`}>{label}</label><input id={`${id}-${key}`} name={key} type={key === 'anio' ? 'number' : 'text'} min={key === 'anio' ? 1 : undefined} step={key === 'anio' ? 1 : undefined} required value={values[key]} onChange={(event) => { if (result.id_documento) onInvalidateReview(result.id_documento); setValues((current) => ({ ...current, [key]: event.target.value })) }} /></div>)}
+          {fields.map(([key, label]) => <div key={key}><label htmlFor={`${id}-${key}`}>{label}</label><input id={`${id}-${key}`} name={key} type={key === 'anio' ? 'number' : 'text'} min={key === 'anio' ? 1 : undefined} step={key === 'anio' ? 1 : undefined} required value={values[key]} onChange={(event) => { if (result.id_documento) onInvalidateReview(result.id_documento); const next = { ...values, [key]: event.target.value }; setValues(next); onDraftChange({ ...next, anio: Number(next.anio) }) }} /></div>)}
         </div>
       </fieldset>
       {validationError && <p className="batch-file-error" role="alert">{validationError}</p>}

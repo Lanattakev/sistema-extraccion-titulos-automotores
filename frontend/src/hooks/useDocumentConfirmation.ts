@@ -19,7 +19,14 @@ export function useDocumentConfirmation(refreshVehicles: () => Promise<void>) {
     const textFields = ['patente', 'marca', 'modelo', 'numero_motor', 'numero_chasis'] as const
     if (textFields.some((key) => typeof fields[key] !== 'string' || !fields[key].trim())
       || !Number.isSafeInteger(fields.anio) || fields.anio <= 0) return
-    update(documentId, { reviewed: { ...fields } })
+    update(documentId, { reviewed: {
+      patente: fields.patente.trim(),
+      marca: fields.marca.trim(),
+      modelo: fields.modelo.trim(),
+      numero_motor: fields.numero_motor.trim(),
+      numero_chasis: fields.numero_chasis.trim(),
+      anio: fields.anio,
+    } })
   }
 
   function onInvalidateReview(documentId: string) {
@@ -45,7 +52,9 @@ export function useDocumentConfirmation(refreshVehicles: () => Promise<void>) {
 
   async function onConfirm(documentId: string) {
     if (batchRunning.current) return
-    if (await confirmOne(documentId) === 'registered') await refreshVehicles()
+    // Consultar también tras un fallo permite actualizar las vistas si el servidor
+    // guardó el vehículo pero se perdió la respuesta de confirmación.
+    if (await confirmOne(documentId) !== 'skipped') await refreshVehicles()
   }
 
   async function onConfirmSelected(documentIds: string[]) {
