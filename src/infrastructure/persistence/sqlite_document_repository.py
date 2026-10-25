@@ -7,6 +7,7 @@ from pathlib import Path
 
 from src.domain.document_record import DocumentRecord
 from src.domain.vehicle_record import VehicleIntake, VehicleRecord
+from src.infrastructure.persistence.sqlite_history_repository import SQLiteHistoryRepository
 from src.infrastructure.persistence.sqlite_vehicle_repository import SQLiteVehicleRepository
 
 
@@ -40,6 +41,8 @@ class SQLiteDocumentRepository:
                 )
             """)
 
+        self.history_repository = SQLiteHistoryRepository(db_path)
+
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self._db_path, timeout=30)
         connection.row_factory = sqlite3.Row
@@ -54,12 +57,20 @@ class SQLiteDocumentRepository:
         updates = ", ".join(f"{key} = excluded.{key}" for key in fields
                             if key not in ("id_documento", "estado", "id_interno"))
         with closing(self._connect()) as connection, connection:
+            connection.execute("BEGIN IMMEDIATE")
+            is_new = connection.execute(
+                "SELECT 1 FROM documents WHERE id_documento = ?", (document.id_documento,),
+            ).fetchone() is None
             connection.execute(
                 f"INSERT INTO documents ({columns}) VALUES ({placeholders}) "
                 f"ON CONFLICT(id_documento) DO UPDATE SET {updates} "
                 "WHERE documents.estado = 'pendiente'",
                 tuple(fields.values()),
             )
+            if is_new:
+                self.history_repository.append_in_transaction(
+                    connection, document.id_documento, "documento_cargado", document.nombre_original,
+                )
 
     def list_all(self) -> list[DocumentRecord]:
         with closing(self._connect()) as connection:
@@ -91,6 +102,12 @@ class SQLiteDocumentRepository:
             if document.estado == "registrado":
                 raise DocumentConflictError("El documento ya esta registrado.")
             self._write_fields(connection, document_id, vehicle, "revisado")
+            if document.estado != "revisado" or any(
+                getattr(document, key) != value for key, value in asdict(vehicle).items()
+            ):
+                self.history_repository.append_in_transaction(
+                    connection, document_id, "documento_revisado", document.nombre_original,
+                )
             return self._get(connection, document_id)
 
     def confirm(self, document_id: str, vehicle: VehicleRecord) -> VehicleIntake:
@@ -110,4 +127,7 @@ class SQLiteDocumentRepository:
                                    requiere_revision=False)
             SQLiteVehicleRepository.insert_in_transaction(connection, intake)
             self._write_fields(connection, document_id, vehicle, "registrado", intake.id_interno)
+            self.history_repository.append_in_transaction(
+                connection, document_id, "documento_registrado", document.nombre_original,
+            )
             return intake

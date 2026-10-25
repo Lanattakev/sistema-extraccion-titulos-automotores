@@ -1,4 +1,5 @@
 import type { BatchDocumentResult, PersistedDocument } from '../types/documents'
+import type { HistoryEvent } from '../types/history'
 import type { ReviewedVehicle, VehicleIntake } from '../types/vehicles'
 
 const API_BASE_URL = 'http://127.0.0.1:8000/api/v1'
@@ -126,4 +127,21 @@ export async function reviewDocument(documentId: string, fields: ReviewedVehicle
     throw new Error('El servidor no devolvió la revisión guardada del documento.')
   }
   return body
+}
+
+export async function getHistory(): Promise<HistoryEvent[]> {
+  const body = await vehicleRequest('/history')
+  if (!Array.isArray(body) || !body.every(isHistoryEvent)) {
+    throw new Error('El servidor devolvió un historial inválido.')
+  }
+  return body
+}
+
+function isHistoryEvent(value: unknown): value is HistoryEvent {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
+  const event = value as Record<string, unknown>
+  return ['id_evento', 'id_documento', 'nombre_original'].every(
+    key => typeof event[key] === 'string' && !!event[key].trim(),
+  ) && ['documento_cargado', 'documento_revisado', 'documento_registrado'].includes(event.tipo_evento as string)
+    && typeof event.fecha_evento === 'string' && Number.isFinite(Date.parse(event.fecha_evento))
 }

@@ -54,7 +54,7 @@ function App() {
       <div className="main-shell">
         <Header activePage={activePage} theme={theme} onThemeChange={setTheme} />
         <main id="main-content" ref={mainRef} aria-labelledby="page-title">
-          <PageHeading title={pages[activePage].title} description={pages[activePage].description} demo={activePage !== 'upload' && activePage !== 'home' && activePage !== 'vehicles' && activePage !== 'metrics'} />
+          <PageHeading title={pages[activePage].title} description={pages[activePage].description} demo={activePage !== 'upload' && activePage !== 'home' && activePage !== 'vehicles' && activePage !== 'metrics' && activePage !== 'history'} />
           {views[activePage]}
           <footer className="page-footer"><span>Fast Procedure <span className="footer-dot">·</span> Gestión con claridad.</span><span>Una forma más simple de avanzar.</span></footer>
         </main>
