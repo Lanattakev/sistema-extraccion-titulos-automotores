@@ -1,3 +1,5 @@
+import type { PersistedDocument } from './documents'
+
 export type ReviewedVehicle = {
   patente: string
   marca: string
@@ -25,7 +27,9 @@ export type VehiclesState = {
 export type ConfirmationState = {
   reviewed?: ReviewedVehicle
   pending?: boolean
-  registered?: VehicleIntake
+  savingReview?: boolean
+  registered?: Pick<VehicleIntake, 'vehicle' | 'id_interno'>
+  dirty?: boolean
   error?: string
 }
 
@@ -38,9 +42,13 @@ export type BatchConfirmation = {
 }
 
 export type ConfirmationProps = {
+  persistedDocuments: PersistedDocument[]
+  documentsLoading: boolean
+  documentsError: string | null
+  refreshDocuments: () => Promise<void>
   confirmations: Record<string, ConfirmationState>
   batchConfirmation: BatchConfirmation | null
-  onMarkReviewed: (documentId: string, fields: ReviewedVehicle) => void
+  onMarkReviewed: (documentId: string, fields: ReviewedVehicle) => Promise<void>
   onInvalidateReview: (documentId: string) => void
   onConfirm: (documentId: string) => Promise<void>
   onConfirmSelected: (documentIds: string[]) => Promise<void>

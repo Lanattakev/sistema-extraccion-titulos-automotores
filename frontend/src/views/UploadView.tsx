@@ -47,8 +47,8 @@ function BatchResult({ result, selected, onSelect, draft, onDraftChange, ...conf
         <div><dt>Fallo</dt><dd>{result.fallo === undefined ? 'No informado' : result.fallo ? 'Sí' : 'No'}</dd></div>
       </dl>
       {result.error && <p className="batch-file-error"><strong>Error:</strong> {result.error}</p>}
-      {confirmation?.error && !reviewing && <p className="batch-file-error" role="alert"><strong>No se registró:</strong> {confirmation.error}</p>}
-      {confirmation?.pending && <p role="status">Registrando documento...</p>}
+      {confirmation?.error && !reviewing && <p className="batch-file-error" role="alert"><strong>No se completó la operación:</strong> {confirmation.error}</p>}
+      {confirmation?.pending && <p role="status">{confirmation.savingReview ? 'Guardando revisión...' : 'Registrando documento...'}</p>}
       {confirmation?.registered && <div className="registration-success" role="status"><Icon name="check" /><div><strong>Vehículo registrado correctamente.</strong><p>{confirmation.registered.vehicle.patente} · ID {confirmation.registered.id_interno}</p></div></div>}
       {reviewing && canReview && !confirmation?.registered && <DocumentReview result={result} draft={draft} onDraftChange={onDraftChange} {...confirmationProps} onInvalidateReview={(id) => { onSelect(false); confirmationProps.onInvalidateReview(id) }} onClose={() => setReviewing(false)} />}
     </li>
@@ -60,7 +60,9 @@ export function UploadView({ initialFiles = [], ...confirmationProps }: Confirma
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [drafts, setDrafts] = useState<Record<string, ReviewedVehicle>>({})
   const [files, setFiles] = useState<File[]>(initialFiles)
-  const [results, setResults] = useState<BatchDocumentResult[] | null>(null)
+  const [batchResults, setResults] = useState<BatchDocumentResult[] | null>(null)
+  const results = batchResults ?? confirmationProps.persistedDocuments
+  const [reviewingBatch, setReviewingBatch] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const requestRef = useRef<AbortController | null>(null)
@@ -98,23 +100,27 @@ export function UploadView({ initialFiles = [], ...confirmationProps }: Confirma
       numero_motor: fields.numero_motor!, numero_chasis: fields.numero_chasis!, anio: fields.anio,
     } }]
   })
-  const bulkDisabled = loading || !!batchConfirmation?.running
+  const bulkDisabled = loading || reviewingBatch || confirmationProps.documentsLoading || !!batchConfirmation?.running
   const selectedReviewCandidates = reviewCandidates.filter(({ id }) => selectedIds.has(id))
 
-  function markAllReviewed() {
+  async function markReviewed(candidates: typeof reviewCandidates) {
     if (bulkDisabled) return
-    for (const { id, fields } of reviewCandidates) confirmationProps.onMarkReviewed(id, fields)
+    setReviewingBatch(true)
+    try {
+      await Promise.all(candidates.map(({ id, fields }) => confirmationProps.onMarkReviewed(id, fields)))
+    } finally {
+      setReviewingBatch(false)
+    }
   }
 
   function markSelectedReviewed() {
-    if (bulkDisabled) return
-    for (const { id, fields } of selectedReviewCandidates) confirmationProps.onMarkReviewed(id, fields)
+    void markReviewed(selectedReviewCandidates)
   }
 
   useEffect(() => () => requestRef.current?.abort(), [])
 
   function addFiles(selected: File[]) {
-    if (requestRef.current || batchConfirmation?.running) return
+    if (requestRef.current || reviewingBatch || batchConfirmation?.running) return
     setFiles((current) => [...current, ...selected])
     setResults(null)
     setDrafts({})
@@ -123,7 +129,7 @@ export function UploadView({ initialFiles = [], ...confirmationProps }: Confirma
   }
 
   async function submitBatch() {
-    if (!files.length || requestRef.current || batchConfirmation?.running) return
+    if (!files.length || requestRef.current || reviewingBatch || batchConfirmation?.running) return
     const controller = new AbortController()
     requestRef.current = controller
     setLoading(true)
@@ -136,6 +142,7 @@ export function UploadView({ initialFiles = [], ...confirmationProps }: Confirma
       if (!controller.signal.aborted) {
         setResults(batch)
         setFiles([])
+        await confirmationProps.refreshDocuments()
       }
     } catch (cause) {
       if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'Ocurrió un error al procesar el lote.')
@@ -150,7 +157,7 @@ export function UploadView({ initialFiles = [], ...confirmationProps }: Confirma
   return (
     <div className="view-stack">
       <div className="notice"><Icon name="file" /><p>Cargá tus títulos para extraer los datos. Revisá la información devuelta antes de registrar un vehículo.</p></div>
-      <UploadArea onFilesSelected={addFiles} loading={loading || batchConfirmation?.running} />
+      <UploadArea onFilesSelected={addFiles} loading={loading || reviewingBatch || batchConfirmation?.running} />
       <section className="panel" aria-labelledby="files-title">
         <div className="panel-heading"><div><h2 id="files-title">Archivos del lote</h2><p>{files.length ? `${files.length} archivo(s) seleccionado(s)` : 'Seleccioná o arrastrá archivos para comenzar.'}</p></div></div>
         {files.length > 0 && <ul className="file-list">{files.map((file, index) => (
@@ -163,6 +170,8 @@ export function UploadView({ initialFiles = [], ...confirmationProps }: Confirma
         <div className="batch-actions"><button className="primary-button" type="button" disabled={loading || !files.length || batchConfirmation?.running} onClick={submitBatch}>{loading ? 'Procesando lote…' : 'Procesar archivos'}</button><p role="status">{loading ? 'Enviando y extrayendo los datos. Esto puede tardar unos instantes.' : results !== null ? `${results.length} resultado(s) recibido(s).` : 'Los archivos se envían al presionar Procesar archivos.'}</p></div>
       </section>
       {error && <div className="batch-alert" role="alert"><strong>No se completó el procesamiento.</strong><p>{error}</p><p>Los archivos siguen seleccionados. Podés volver a intentar el envío.</p></div>}
+      {confirmationProps.documentsLoading && <p role="status">Recuperando documentos guardados...</p>}
+      {confirmationProps.documentsError && <div className="batch-alert" role="alert"><p>{confirmationProps.documentsError}</p><button className="text-button" type="button" onClick={() => void confirmationProps.refreshDocuments()}>Reintentar consulta</button></div>}
       <section className="panel" aria-label="Confirmación múltiple">
         <div className="batch-actions" role="status" aria-live="polite">
           <p>Pendientes: <strong>{pendingDocuments.length}</strong></p>
@@ -171,14 +180,15 @@ export function UploadView({ initialFiles = [], ...confirmationProps }: Confirma
           <p>Registrados: <strong>{registeredCount}</strong></p>
         </div>
         <div className="batch-actions">
-          <button className="primary-button" type="button" disabled={bulkDisabled || !reviewCandidates.length} onClick={markAllReviewed}>Marcar todos como revisados</button>
+          <button className="primary-button" type="button" disabled={bulkDisabled || !reviewCandidates.length} onClick={() => void markReviewed(reviewCandidates)}>Marcar todos como revisados</button>
           <button className="primary-button" type="button" disabled={bulkDisabled || !selectedReviewCandidates.length} onClick={markSelectedReviewed}>Marcar seleccionados como revisados</button>
           <button className="text-button" type="button" disabled={bulkDisabled || !selectableIds.length} onClick={() => { if (!bulkDisabled) setSelectedIds(new Set(selectableIds)) }}>Seleccionar todos los revisados</button>
           <button className="text-button" type="button" disabled={bulkDisabled || !selectedIds.size} onClick={() => { if (!bulkDisabled) setSelectedIds(new Set()) }}>Deseleccionar todos</button>
           <p>Marcar como revisado no registra vehículos. Los documentos con datos incompletos o con fallos se omiten.</p>
+          {reviewingBatch && <p role="status">Guardando las revisiones seleccionadas...</p>}
         </div>
         <div className="batch-actions">
-          <button className="primary-button" type="button" disabled={!!batchConfirmation?.running || !eligibleSelectedIds.length} onClick={() => void onConfirmSelected(eligibleSelectedIds)}>Confirmar seleccionados</button>
+          <button className="primary-button" type="button" disabled={bulkDisabled || !eligibleSelectedIds.length} onClick={() => void onConfirmSelected(eligibleSelectedIds)}>Confirmar seleccionados</button>
           <p role="status">{eligibleSelectedIds.length} documento(s) revisado(s) seleccionado(s).</p>
           <p>Solo se registran documentos marcados como Revisado.</p>
         </div>

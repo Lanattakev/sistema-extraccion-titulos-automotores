@@ -34,7 +34,7 @@ export function DocumentReview({ result, confirmations, batchConfirmation, onMar
       return
     }
     setValidationError(null)
-    onMarkReviewed(result.id_documento, { ...values, anio: year })
+    void onMarkReviewed(result.id_documento, { ...values, anio: year })
   }
 
   return (
@@ -51,10 +51,10 @@ export function DocumentReview({ result, confirmations, batchConfirmation, onMar
       {confirmation?.error && <div className="batch-alert" role="alert"><p>{confirmation.error}</p><p>Si se interrumpió la conexión, consultá Vehículos antes de reintentar: el servidor podría haber guardado el registro.</p></div>}
       <div className="review-actions">
         <button className="primary-button" type="submit" disabled={confirmation?.pending || !!confirmation?.registered || batchConfirmation?.running || !result.id_documento}>Marcar como revisado</button>
-        <button className="primary-button" type="button" disabled={!confirmation?.reviewed || confirmation?.pending || !!confirmation?.registered || batchConfirmation?.running} onClick={() => { if (result.id_documento) void onConfirm(result.id_documento) }}>{confirmation?.pending ? 'Registrando...' : 'Confirmar y registrar'}</button>
+        <button className="primary-button" type="button" disabled={!confirmation?.reviewed || confirmation?.pending || !!confirmation?.registered || batchConfirmation?.running} onClick={() => { if (result.id_documento) void onConfirm(result.id_documento) }}>{confirmation?.savingReview ? 'Guardando revisión...' : confirmation?.pending ? 'Registrando...' : 'Confirmar y registrar'}</button>
         <button className="text-button" type="button" onClick={onClose} disabled={confirmation?.pending}>Cerrar revisión</button>
       </div>
-      {confirmation?.pending && <p role="status">Confirmando el registro. Esperá la respuesta del servidor.</p>}
+      {confirmation?.pending && <p role="status">{confirmation.savingReview ? 'Guardando la revisión en el servidor.' : 'Confirmando el registro. Esperá la respuesta del servidor.'}</p>}
     </form>
   )
 }

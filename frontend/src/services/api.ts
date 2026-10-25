@@ -1,4 +1,4 @@
-import type { BatchDocumentResult } from '../types/documents'
+import type { BatchDocumentResult, PersistedDocument } from '../types/documents'
 import type { ReviewedVehicle, VehicleIntake } from '../types/vehicles'
 
 const API_BASE_URL = 'http://127.0.0.1:8000/api/v1'
@@ -93,5 +93,37 @@ export async function confirmDocument(documentId: string, fields: ReviewedVehicl
     body: JSON.stringify({ patente, marca, modelo, numero_motor, numero_chasis, anio }),
   })
   if (!isVehicleIntake(body)) throw new Error('El servidor respondió sin una ficha válida de confirmación. Verificá Vehículos antes de volver a intentar.')
+  return body
+}
+
+function isPersistedDocument(value: unknown): value is PersistedDocument {
+  if (!isBatchResult(value)) return false
+  const item = value as Record<string, unknown>
+  const complete = ['patente', 'marca', 'modelo', 'numero_motor', 'numero_chasis'].every(
+    (key) => typeof item[key] === 'string' && !!item[key].trim(),
+  ) && Number.isSafeInteger(item.anio) && (item.anio as number) > 0
+  return typeof item.id_documento === 'string' && typeof item.nombre_original === 'string'
+    && ['pendiente', 'revisado', 'registrado'].includes(item.estado as string)
+    && (item.estado === 'pendiente' || complete)
+    && (item.estado === 'registrado' ? typeof item.id_interno === 'string' : item.id_interno === null)
+}
+
+export async function getDocuments(): Promise<PersistedDocument[]> {
+  const body = await vehicleRequest('/documents')
+  if (!Array.isArray(body) || !body.every(isPersistedDocument)) {
+    throw new Error('El servidor devolvió una lista de documentos inválida.')
+  }
+  return body
+}
+
+export async function reviewDocument(documentId: string, fields: ReviewedVehicle): Promise<PersistedDocument> {
+  const { patente, marca, modelo, numero_motor, numero_chasis, anio } = fields
+  const body = await vehicleRequest(`/documents/${encodeURIComponent(documentId)}/review`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ patente, marca, modelo, numero_motor, numero_chasis, anio }),
+  })
+  if (!isPersistedDocument(body) || body.estado !== 'revisado' || body.id_documento !== documentId) {
+    throw new Error('El servidor no devolvió la revisión guardada del documento.')
+  }
   return body
 }

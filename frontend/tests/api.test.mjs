@@ -103,76 +103,203 @@ test('propaga errores de confirmación y de consulta sin fabricar registros', as
 })
 
 test('bloquea doble clic y una segunda confirmación después del éxito', async (context) => {
-  // Ejecuta el controlador del hook con refs estables, sin montar una UI ni enviar datos reales.
-  const hookSource = await readFile(new URL('../src/hooks/useDocumentConfirmation.ts', import.meta.url), 'utf8')
-  const hooks = 'data:text/javascript;base64,' + Buffer.from('export const useRef = (current) => ({ current }); export const useState = () => [undefined, () => {}];').toString('base64')
-  const apiModule = 'data:text/javascript;base64,' + Buffer.from(outputText).toString('base64')
-  const compiled = ts.transpileModule(hookSource, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2023 } }).outputText
-    .replace(/from ['"]react['"]/, `from '${hooks}'`)
-    .replace(/from ['"]\.\.\/services\/api['"]/, `from '${apiModule}'`)
-  const { useDocumentConfirmation } = await import('data:text/javascript;base64,' + Buffer.from(compiled).toString('base64'))
   let complete
   let requests = 0
+  let patches = 0
+  let documentQueries = 0
   let refreshes = 0
-  mockFetch(context, () => {
+  let document = persistedDocument('doc-1', reviewed, 'pendiente')
+  mockFetch(context, async (url, options) => {
+    if (url.endsWith('/documents') && !options?.method) {
+      documentQueries++
+      return Response.json([document])
+    }
+    if (url.endsWith('/doc-1/review') && options?.method === 'PATCH') {
+      patches++
+      assert.deepEqual(JSON.parse(options.body), reviewed)
+      document = persistedDocument('doc-1', reviewed, 'revisado')
+      return Response.json(document)
+    }
+    assert.equal(url, 'http://127.0.0.1:8000/api/v1/documents/doc-1/confirm')
+    assert.equal(options?.method, 'POST')
+    assert.deepEqual(JSON.parse(options.body), reviewed)
     requests++
-    return new Promise((resolve) => { complete = () => resolve(Response.json(saved, { status: 201 })) })
+    return new Promise((resolve) => {
+      complete = () => {
+        document = { ...document, estado: 'registrado', id_interno: saved.id_interno }
+        resolve(Response.json(saved, { status: 201 }))
+      }
+    })
   })
-  const { onConfirm, onMarkReviewed } = useDocumentConfirmation(async () => { refreshes++ })
-  onMarkReviewed('doc-1', reviewed)
-  const pending = onConfirm('doc-1')
-  await onConfirm('doc-1')
+  const { controller, updates } = await confirmationController(async () => { refreshes++ }, context)
+  await controller.onMarkReviewed('doc-1', reviewed)
+  assert.equal(patches, 1)
+  assert.deepEqual(updates[0]['doc-1'].reviewed, reviewed)
+  assert.equal(requests, 0)
+  const pending = controller.onConfirm('doc-1')
+  await controller.onConfirm('doc-1')
   assert.equal(requests, 1)
+  assert.equal(updates[0]['doc-1'].pending, true)
   complete()
   await pending
-  await onConfirm('doc-1')
+  assert.equal(updates[0]['doc-1'].registered.id_interno, saved.id_interno)
+  await controller.onConfirm('doc-1')
   assert.equal(requests, 1)
   assert.equal(refreshes, 1)
+  assert.equal(documentQueries, 2)
+  assert.equal(updates[4], null)
 })
 
+function persistedDocument(id, fields, estado) {
+  return { id_documento: id, nombre_original: 'titulo.pdf', ...fields, estado, id_interno: null }
+}
+
 let controllerNumber = 0
-async function confirmationController(refresh) {
+async function confirmationController(refresh, context) {
   const hookSource = await readFile(new URL('../src/hooks/useDocumentConfirmation.ts', import.meta.url), 'utf8')
-  const hooks = 'data:text/javascript;base64,' + Buffer.from(`export const updates = []; export const useRef = (current) => ({ current }); export const useState = (initial) => { const index = updates.length; updates.push(initial); return [initial, value => { updates[index] = value }]; }; // ${controllerNumber++}`).toString('base64')
+  const hooks = 'data:text/javascript;base64,' + Buffer.from(`
+    export const updates = [];
+    export const effects = [];
+    export const useRef = (current) => ({ current });
+    export const useState = (initial) => {
+      const index = updates.length;
+      updates.push(typeof initial === 'function' ? initial() : initial);
+      return [updates[index], value => {
+        updates[index] = typeof value === 'function' ? value(updates[index]) : value;
+      }];
+    };
+    export const useCallback = callback => callback;
+    export const useEffect = effect => { effects.push(effect); };
+    // ${controllerNumber++}
+  `).toString('base64')
   const apiModule = 'data:text/javascript;base64,' + Buffer.from(outputText).toString('base64')
   const compiled = ts.transpileModule(hookSource, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2023 } }).outputText
     .replace(/from ['"]react['"]/, `from '${hooks}'`)
     .replace(/from ['"]\.\.\/services\/api['"]/, `from '${apiModule}'`)
   const { useDocumentConfirmation } = await import('data:text/javascript;base64,' + Buffer.from(compiled).toString('base64'))
-  const { updates } = await import(hooks)
-  return { controller: useDocumentConfirmation(refresh), updates }
+  const { updates, effects } = await import(hooks)
+  const controller = useDocumentConfirmation(refresh)
+  const cleanups = effects.map(effect => effect())
+  context.after(() => { cleanups.forEach(cleanup => { if (typeof cleanup === 'function') cleanup() }) })
+  // Espera la carga inicial iniciada por useEffect, incluida su cadena de promesas.
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(updates[3], false)
+  assert.equal(updates[4], null)
+  return { controller, updates }
 }
 
-test('marcar revisado no persiste y editar obliga a revisar nuevamente', async (context) => {
+test('marcar revisado requiere PATCH exitoso y editar obliga a revisar nuevamente', async (context) => {
   let requests = 0
-  mockFetch(context, async () => { requests++; return Response.json(saved, { status: 201 }) })
-  const { controller, updates } = await confirmationController(async () => {})
+  let patches = 0
+  let documentQueries = 0
+  let refreshes = 0
+  let completeReview
+  let document = persistedDocument('doc-1', reviewed, 'pendiente')
+  const corrections = { ...reviewed, modelo: 'Civic corregido' }
+  mockFetch(context, async (url, options) => {
+    if (url.endsWith('/documents') && !options?.method) {
+      documentQueries++
+      return Response.json([document])
+    }
+    if (url.endsWith('/doc-1/review') && options?.method === 'PATCH') {
+      patches++
+      const fields = JSON.parse(options.body)
+      assert.deepEqual(fields, patches === 1 ? reviewed : corrections)
+      return new Promise(resolve => {
+        completeReview = () => {
+          document = persistedDocument('doc-1', fields, 'revisado')
+          resolve(Response.json(document))
+        }
+      })
+    }
+    assert.equal(url, 'http://127.0.0.1:8000/api/v1/documents/doc-1/confirm')
+    assert.equal(options?.method, 'POST')
+    assert.deepEqual(JSON.parse(options.body), corrections)
+    assert.equal(document.estado, 'revisado')
+    requests++
+    document = { ...document, estado: 'registrado', id_interno: saved.id_interno }
+    return Response.json({ ...saved, vehicle: corrections }, { status: 201 })
+  })
+  const { controller, updates } = await confirmationController(async () => { refreshes++ }, context)
   await controller.onConfirm('pendiente')
-  controller.onMarkReviewed('doc-1', reviewed)
   assert.equal(requests, 0)
-  assert.deepEqual(updates[0]['doc-1'].reviewed, reviewed)
-  controller.onInvalidateReview('doc-1')
+  assert.equal(patches, 0)
+  assert.equal(updates[0]['doc-1'].reviewed, undefined)
+  const firstReview = controller.onMarkReviewed('doc-1', reviewed)
+  assert.equal(patches, 1)
+  assert.equal(updates[0]['doc-1'].reviewed, undefined)
+  assert.equal(updates[0]['doc-1'].savingReview, true)
   await controller.onConfirm('doc-1')
   assert.equal(requests, 0)
-  controller.onMarkReviewed('doc-1', { ...reviewed, modelo: 'Civic corregido' })
+  completeReview()
+  await firstReview
+  assert.deepEqual(updates[0]['doc-1'].reviewed, reviewed)
+  controller.onInvalidateReview('doc-1')
+  assert.equal(updates[0]['doc-1'].reviewed, undefined)
+  assert.equal(updates[0]['doc-1'].dirty, true)
+  await controller.onConfirm('doc-1')
+  assert.equal(requests, 0)
+  assert.equal(patches, 1)
+  const secondReview = controller.onMarkReviewed('doc-1', corrections)
+  assert.equal(patches, 2)
+  assert.equal(updates[0]['doc-1'].reviewed, undefined)
+  await controller.onConfirm('doc-1')
+  assert.equal(requests, 0)
+  completeReview()
+  await secondReview
+  assert.deepEqual(updates[0]['doc-1'].reviewed, corrections)
   await controller.onConfirm('doc-1')
   assert.equal(requests, 1)
   assert.ok(updates[0]['doc-1'].registered)
+  assert.deepEqual(updates[0]['doc-1'].registered.vehicle, corrections)
+  assert.equal(patches, 2)
+  assert.equal(documentQueries, 2)
+  assert.equal(refreshes, 1)
+  assert.equal(updates[4], null)
 })
 
 test('confirmación múltiple omite pendientes, continúa tras un fallo y no duplica éxitos', async (context) => {
   const calls = []
+  const patches = []
+  let documentQueries = 0
   let refreshes = 0
+  let failSecond = true
+  const fieldsById = {
+    'doc-1': reviewed,
+    'doc-2': { ...reviewed, modelo: 'Segundo' },
+    'doc-3': { ...reviewed, modelo: 'Tercero' },
+    pendiente: reviewed,
+  }
+  const documents = Object.fromEntries(Object.entries(fieldsById).map(([id, fields]) => [id, persistedDocument(id, fields, 'pendiente')]))
   mockFetch(context, async (url, options) => {
+    if (url.endsWith('/documents') && !options?.method) {
+      documentQueries++
+      return Response.json(Object.values(documents))
+    }
     const id = url.split('/').at(-2)
-    calls.push({ id, fields: JSON.parse(options.body) })
-    return id === 'doc-2' ? Response.json({ detail: 'Error del segundo documento' }, { status: 400 }) : Response.json(saved, { status: 201 })
+    const fields = JSON.parse(options.body)
+    assert.deepEqual(fields, fieldsById[id])
+    if (url.endsWith('/review') && options?.method === 'PATCH') {
+      patches.push(id)
+      documents[id] = persistedDocument(id, fields, 'revisado')
+      return Response.json(documents[id])
+    }
+    assert.equal(url, `http://127.0.0.1:8000/api/v1/documents/${id}/confirm`)
+    assert.equal(options?.method, 'POST')
+    assert.equal(documents[id].estado, 'revisado')
+    calls.push({ id, fields })
+    if (id === 'doc-2' && failSecond) return Response.json({ detail: 'Error del segundo documento' }, { status: 400 })
+    const intake = { ...saved, vehicle: fields, id_interno: `registro-${id}` }
+    documents[id] = { ...documents[id], estado: 'registrado', id_interno: intake.id_interno }
+    return Response.json(intake, { status: 201 })
   })
-  const { controller, updates } = await confirmationController(async () => { refreshes++ })
-  controller.onMarkReviewed('doc-1', reviewed)
-  controller.onMarkReviewed('doc-2', { ...reviewed, modelo: 'Segundo' })
-  controller.onMarkReviewed('doc-3', { ...reviewed, modelo: 'Tercero' })
+  const { controller, updates } = await confirmationController(async () => { refreshes++ }, context)
+  for (const id of ['doc-1', 'doc-2', 'doc-3']) await controller.onMarkReviewed(id, fieldsById[id])
+  assert.deepEqual(patches, ['doc-1', 'doc-2', 'doc-3'])
+  assert.equal(calls.length, 0)
+  for (const id of patches) assert.deepEqual(updates[0][id].reviewed, fieldsById[id])
   const processing = controller.onConfirmSelected(['doc-1', 'pendiente', 'doc-2', 'doc-1', 'doc-3'])
+  assert.deepEqual(updates[1], { running: true, total: 3, completed: 0, registered: [], failed: [] })
   await controller.onConfirmSelected(['doc-1', 'doc-2'])
   await controller.onConfirm('doc-3')
   await processing
@@ -181,12 +308,27 @@ test('confirmación múltiple omite pendientes, continúa tras un fallo y no dup
   assert.equal(calls[2].fields.modelo, 'Tercero')
   assert.deepEqual(updates[1], { running: false, total: 3, completed: 3, registered: ['doc-1', 'doc-3'], failed: ['doc-2'] })
   assert.match(updates[0]['doc-2'].error, /Error del segundo documento/)
+  assert.ok(updates[0]['doc-1'].registered)
   assert.ok(updates[0]['doc-3'].registered)
+  assert.equal(updates[0]['doc-2'].registered, undefined)
+  assert.deepEqual(updates[0]['doc-2'].reviewed, fieldsById['doc-2'])
+  assert.equal(updates[0].pendiente.reviewed, undefined)
+  assert.equal(documents.pendiente.estado, 'pendiente')
   assert.equal(refreshes, 1)
+  assert.equal(documentQueries, 2)
   await controller.onConfirmSelected(['doc-1', 'doc-3', 'pendiente'])
   await controller.onConfirm('doc-1')
   assert.equal(calls.length, 3)
+  assert.equal(documentQueries, 2)
+  failSecond = false
   await controller.onConfirmSelected(['doc-2'])
   assert.equal(calls.length, 4)
+  assert.deepEqual(calls.map(({ id }) => id), ['doc-1', 'doc-2', 'doc-3', 'doc-2'])
+  assert.deepEqual(updates[1], { running: false, total: 1, completed: 1, registered: ['doc-2'], failed: [] })
+  assert.ok(updates[0]['doc-2'].registered)
+  assert.equal(updates[0]['doc-2'].error, undefined)
+  assert.deepEqual(patches, ['doc-1', 'doc-2', 'doc-3'])
   assert.equal(refreshes, 2)
+  assert.equal(documentQueries, 3)
+  assert.equal(updates[4], null)
 })

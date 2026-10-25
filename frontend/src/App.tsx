@@ -41,7 +41,7 @@ function App() {
     home: <HomeView vehicleState={vehicleState} onFilesSelected={(files) => { setUploadFiles(files); navigate('upload') }} />,
     upload: <UploadView initialFiles={uploadFiles} {...confirmation} />,
     vehicles: <VehiclesView vehicleState={vehicleState} />,
-    metrics: <MetricsView />,
+    metrics: <MetricsView vehicleState={vehicleState} documentState={confirmation} />,
     history: <HistoryView />,
     settings: <SettingsView theme={theme} onThemeChange={setTheme} />,
     help: <HelpView onNavigate={navigate} />,
@@ -54,7 +54,7 @@ function App() {
       <div className="main-shell">
         <Header activePage={activePage} theme={theme} onThemeChange={setTheme} />
         <main id="main-content" ref={mainRef} aria-labelledby="page-title">
-          <PageHeading title={pages[activePage].title} description={pages[activePage].description} demo={activePage !== 'upload' && activePage !== 'home' && activePage !== 'vehicles'} />
+          <PageHeading title={pages[activePage].title} description={pages[activePage].description} demo={activePage !== 'upload' && activePage !== 'home' && activePage !== 'vehicles' && activePage !== 'metrics'} />
           {views[activePage]}
           <footer className="page-footer"><span>Fast Procedure <span className="footer-dot">·</span> Gestión con claridad.</span><span>Una forma más simple de avanzar.</span></footer>
         </main>

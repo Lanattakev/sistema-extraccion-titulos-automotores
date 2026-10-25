@@ -11,3 +11,10 @@ export type BatchDocumentResult = {
   fallo?: boolean
   error?: string | null
 }
+
+export type PersistedDocument = BatchDocumentResult & {
+  id_documento: string
+  nombre_original: string
+  estado: 'pendiente' | 'revisado' | 'registrado'
+  id_interno: string | null
+}

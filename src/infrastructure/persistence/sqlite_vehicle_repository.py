@@ -34,23 +34,28 @@ class SQLiteVehicleRepository:
 
     def save(self, intake: VehicleIntake) -> None:
         """Inserta un ingreso; un ID repetido produce sqlite3.IntegrityError."""
-        vehicle = intake.vehicle
         with closing(sqlite3.connect(self._db_path)) as connection:
             with connection:
-                connection.execute(
-                    """
-                    INSERT INTO vehicle_intakes (
-                        id_interno, fecha_ingreso, archivo_origen, requiere_revision,
-                        patente, marca, modelo, numero_motor, numero_chasis, anio
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        intake.id_interno, intake.fecha_ingreso.isoformat(),
-                        intake.archivo_origen, int(intake.requiere_revision),
-                        vehicle.patente, vehicle.marca, vehicle.modelo,
-                        vehicle.numero_motor, vehicle.numero_chasis, vehicle.anio,
-                    ),
-                )
+                self.insert_in_transaction(connection, intake)
+
+    @staticmethod
+    def insert_in_transaction(connection: sqlite3.Connection, intake: VehicleIntake) -> None:
+        """Reutiliza el alta dentro de una transaccion documental sin commit propio."""
+        vehicle = intake.vehicle
+        connection.execute(
+            """
+            INSERT INTO vehicle_intakes (
+                id_interno, fecha_ingreso, archivo_origen, requiere_revision,
+                patente, marca, modelo, numero_motor, numero_chasis, anio
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                intake.id_interno, intake.fecha_ingreso.isoformat(),
+                intake.archivo_origen, int(intake.requiere_revision),
+                vehicle.patente, vehicle.marca, vehicle.modelo,
+                vehicle.numero_motor, vehicle.numero_chasis, vehicle.anio,
+            ),
+        )
 
     def get_by_id(self, id_interno: str) -> VehicleIntake | None:
         """Recupera un ingreso o devuelve None si el ID no existe."""

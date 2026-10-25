@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from src.infrastructure.fastapi.routers.documents import router as documents_router
 from src.infrastructure.fastapi.routers.vehicles import router as vehicles_router
+from src.infrastructure.persistence.sqlite_document_repository import SQLiteDocumentRepository
 from src.infrastructure.persistence.sqlite_vehicle_repository import SQLiteVehicleRepository
 from src.infrastructure.settings.config import get_settings
 from src.infrastructure.settings.logger import logger
@@ -21,6 +22,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     for prefix in ("sqlite+aiosqlite:///", "sqlite:///"):
         if database_url.startswith(prefix):
             app.state.vehicle_repository = SQLiteVehicleRepository(database_url[len(prefix):])
+            app.state.document_repository = SQLiteDocumentRepository(database_url[len(prefix):])
             break
     else:
         raise ValueError("DATABASE_URL debe utilizar SQLite.")
