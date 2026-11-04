@@ -62,6 +62,7 @@ function isVehicleIntake(value: unknown): value is VehicleIntake {
   return ['patente', 'marca', 'modelo', 'numero_motor', 'numero_chasis'].every((key) => typeof vehicle[key] === 'string')
     && typeof vehicle.anio === 'number' && Number.isInteger(vehicle.anio)
     && typeof item.id_interno === 'string' && typeof item.archivo_origen === 'string'
+    && Number.isSafeInteger(item.numero_registro) && (item.numero_registro as number) > 0
     && typeof item.fecha_ingreso === 'string' && Number.isFinite(Date.parse(item.fecha_ingreso))
     && typeof item.requiere_revision === 'boolean'
 }

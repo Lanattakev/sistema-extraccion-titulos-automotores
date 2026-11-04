@@ -68,7 +68,14 @@ test('no envía lotes vacíos y conserva una respuesta vacía', async (context) 
 })
 
 const reviewed = { patente: 'CD456EF', marca: 'Honda', modelo: 'Civic', numero_motor: 'M2', numero_chasis: 'C2', anio: 2022 }
-const saved = { vehicle: reviewed, archivo_origen: 'titulo.pdf', id_interno: 'registro-1', fecha_ingreso: '2026-10-24T12:00:00Z', requiere_revision: false }
+const saved = { vehicle: reviewed, archivo_origen: 'titulo.pdf', id_interno: 'registro-1', numero_registro: 1, fecha_ingreso: '2026-10-24T12:00:00Z', requiere_revision: false }
+
+test('rechaza numeros de registro ausentes, no enteros o no positivos del backend', async context => {
+  for (const numero_registro of [undefined, null, 0, -1, 1.5, '001', true]) {
+    mockFetch(context, async () => Response.json([{ ...saved, numero_registro }]))
+    await assert.rejects(getVehicles(), /lista de vehículos inválida/)
+  }
+})
 
 test('confirma con los seis campos corregidos, año numérico y sin metadatos del documento', async (context) => {
   mockFetch(context, async (url, options) => {

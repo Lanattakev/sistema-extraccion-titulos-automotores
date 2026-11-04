@@ -2,6 +2,7 @@
 import { Icon } from '../components/Icon'
 import { StatusBadge } from '../components/StatusBadge'
 import { VehiclesFeedback } from '../components/VehiclesFeedback'
+import { formatRegistrationNumber } from '../utils/registrationNumber'
 import type { VehiclesState } from '../types/vehicles'
 
 function HowItWorks() {
@@ -36,7 +37,7 @@ export function HomeView({ onFilesSelected, vehicleState }: {
         {loading && <p className="vehicle-feedback" role="status">Cargando registros recientes…</p>}
         {error && <p className="vehicle-feedback">No se pudo obtener el listado. Reintentá la consulta desde el aviso superior.</p>}
         {available && !recent.length && <p className="vehicle-feedback">Todavía no hay registros. Cargá un título, revisalo y confirmalo para registrar tu primer vehículo.</p>}
-        {available && !!recent.length && <div className="table-scroll"><table><caption className="sr-only">Últimos cinco registros vehiculares guardados.</caption><thead><tr>{['Documento', 'Patente', 'Vehículo', 'Ingreso', 'Estado'].map((label) => <th key={label} scope="col">{label}</th>)}</tr></thead><tbody>{recent.map((intake) => <tr key={intake.id_interno}><td><div className="document-cell"><span className="file-icon"><Icon name="file" /></span><strong>{intake.archivo_origen}</strong></div></td><td><span className="plate">{intake.vehicle.patente}</span></td><td>{intake.vehicle.marca} {intake.vehicle.modelo}<small>{intake.vehicle.anio}</small></td><td>{new Date(intake.fecha_ingreso).toLocaleString('es-AR')}</td><td><StatusBadge status={intake.requiere_revision ? 'review' : 'registered'} /></td></tr>)}</tbody></table></div>}
+        {available && !!recent.length && <div className="table-scroll"><table><caption className="sr-only">Últimos cinco registros vehiculares guardados.</caption><thead><tr>{['N.º registro', 'Documento', 'Patente', 'Vehículo', 'Ingreso', 'Estado'].map((label) => <th key={label} scope="col">{label}</th>)}</tr></thead><tbody>{recent.map((intake) => <tr key={intake.id_interno}><td>{formatRegistrationNumber(intake.numero_registro)}</td><td><div className="document-cell"><span className="file-icon"><Icon name="file" /></span><strong>{intake.archivo_origen}</strong></div></td><td><span className="plate">{intake.vehicle.patente}</span></td><td>{intake.vehicle.marca} {intake.vehicle.modelo}<small>{intake.vehicle.anio}</small></td><td>{new Date(intake.fecha_ingreso).toLocaleString('es-AR')}</td><td><StatusBadge status={intake.requiere_revision ? 'review' : 'registered'} /></td></tr>)}</tbody></table></div>}
       </section>
     </div>
   )

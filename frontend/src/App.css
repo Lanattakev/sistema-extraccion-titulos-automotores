@@ -170,6 +170,8 @@ td small { font-size: 12px; }
 .view-stack { display: grid; gap: 28px; }
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; min-width: 0; }
 .panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 26px 28px; }
+.vehicles-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 12px; margin-left: auto; }
+.vehicles-actions .primary-button { margin: 0; }
 .demo-label { white-space: nowrap; font-size: 11px; }
 .notice { display: flex; align-items: flex-start; gap: 12px; background: var(--soft); border: 1px solid var(--line); border-radius: 10px; color: var(--green); padding: 17px 20px; }
 .notice p { font-size: 13px; line-height: 1.8; }

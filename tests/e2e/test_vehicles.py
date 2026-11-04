@@ -33,10 +33,14 @@ def test_create_list_and_get_vehicle(client: TestClient) -> None:
     assert intake["archivo_origen"] == "auto.pdf"
     assert intake["requiere_revision"] is True
     assert intake["fecha_ingreso"]
+    assert intake["numero_registro"] == 1
     detail = client.get(f"/api/v1/vehicles/{intake['id_interno']}")
     assert detail.status_code == 200
     assert detail.json() == intake
     assert client.get("/api/v1/vehicles").json() == [intake]
+    second = client.post("/api/v1/vehicles", json=payload()).json()
+    assert second["numero_registro"] == 2
+    assert second["id_interno"] != intake["id_interno"]
 
 
 def test_missing_vehicle(client: TestClient) -> None:

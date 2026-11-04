@@ -41,6 +41,7 @@ class VehicleIntake:
     id_interno: str = field(default_factory=lambda: str(uuid4()))
     fecha_ingreso: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     requiere_revision: bool = True
+    numero_registro: int | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.archivo_origen, str):

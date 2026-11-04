@@ -13,6 +13,7 @@ export type VehicleIntake = {
   vehicle: ReviewedVehicle
   archivo_origen: string
   id_interno: string
+  numero_registro: number
   fecha_ingreso: string
   requiere_revision: boolean
 }
