@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import test from 'node:test'
 import * as React from 'react'
@@ -10,9 +10,14 @@ const nodeRequire = createRequire(import.meta.url)
 const compile = path => ts.transpileModule(readFileSync(new URL(path, import.meta.url), 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2023, jsx: ts.JsxEmit.ReactJSX },
 }).outputText
-function load(path, require = nodeRequire) {
+function load(path, require) {
   const module = { exports: {} }
-  new Function('require', 'exports', compile(path))(require, module.exports)
+  const resolve = require ?? (name => {
+    if (!name.startsWith('.')) return nodeRequire(name)
+    const base = new URL(name, new URL(path, import.meta.url))
+    return load(['.ts', '.tsx'].map(extension => new URL(base.href + extension)).find(existsSync))
+  })
+  new Function('require', 'exports', compile(path))(resolve, module.exports)
   return module.exports
 }
 const numberUtils = load('../src/utils/registrationNumber.ts')
@@ -27,8 +32,10 @@ const header = '"numero_registro","patente","marca","modelo","numero_motor","num
 function view(requireOverrides = {}) {
   return load('../src/views/VehiclesView.tsx', name => {
     if (name in requireOverrides) return requireOverrides[name]
+    if (name === '../utils/vehicleSearch') return load('../src/utils/vehicleSearch.ts')
     if (name === '../utils/registrationNumber') return numberUtils
     if (name === '../utils/vehiclesCsv') return csvUtils
+    if (name.startsWith('../utils/')) return load(`../src/views/${name}.ts`)
     if (name.startsWith('../components/')) return load(`../src/views/${name}.tsx`)
     return nodeRequire(name)
   }).VehiclesView
@@ -60,6 +67,7 @@ test('Vehiculos muestra el numero de registro en listado y ficha, conserva UUID 
 
 test('Inicio muestra numero de registro en registros recientes', () => {
   const { HomeView } = load('../src/views/HomeView.tsx', name => {
+    if (name === '../utils/vehicleSearch') return load('../src/utils/vehicleSearch.ts')
     if (name === '../utils/registrationNumber') return numberUtils
     if (name === '../components/UploadArea') return { UploadArea: () => null }
     if (name.startsWith('../components/')) return load(`../src/views/${name}.tsx`)

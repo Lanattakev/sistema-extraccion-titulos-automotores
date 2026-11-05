@@ -32,6 +32,8 @@ const document = (id, estado) => ({ id_documento: id, nombre_original: `${id}.pd
 const vehicle = (id, marca) => ({ vehicle: { ...fields, marca }, id_interno: id, archivo_origen: `${id}.pdf`, fecha_ingreso: '2026-10-24T12:00:00Z', requiere_revision: false })
 function props(documents = [], vehicles = []) {
   return {
+    now: new Date(2026, 10, 4, 12),
+    historyState: { events: [], loading: false, error: null, refresh: async () => {} },
     documentState: { persistedDocuments: documents, documentsLoading: false, documentsError: null, refreshDocuments: async () => {} },
     vehicleState: { vehicles, loading: false, error: null, refresh: async () => {} },
   }

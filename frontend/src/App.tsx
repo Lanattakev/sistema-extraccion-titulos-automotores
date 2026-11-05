@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Header } from './components/Header'
 import { PageHeading } from './components/PageHeading'
 import { Sidebar } from './components/Sidebar'
@@ -14,6 +14,7 @@ import { UploadView } from './views/UploadView'
 import { VehiclesView } from './views/VehiclesView'
 import { useVehicles } from './hooks/useVehicles'
 import { useDocumentConfirmation } from './hooks/useDocumentConfirmation'
+import { useHistory } from './hooks/useHistory'
 import './App.css'
 import './views/Records.css'
 
@@ -22,7 +23,21 @@ function App() {
   const [activePage, setActivePage] = useState<Page>('home')
   const [uploadFiles, setUploadFiles] = useState<File[]>([])
   const vehicleState = useVehicles()
-  const confirmation = useDocumentConfirmation(vehicleState.refresh)
+  const history = useHistory()
+  const refreshHistoryEvents = history.refresh
+  const [now, setNow] = useState(() => new Date())
+  const refreshHistory = useCallback(async () => {
+    await refreshHistoryEvents()
+    setNow(new Date())
+  }, [refreshHistoryEvents])
+  const historyState = { ...history, refresh: refreshHistory }
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 60_000)
+    return () => clearInterval(timer)
+  }, [])
+  const confirmation = useDocumentConfirmation(async () => {
+    await Promise.all([vehicleState.refresh(), historyState.refresh()])
+  })
   const mainRef = useRef<HTMLElement>(null)
 
   function navigate(page: Page) {
@@ -39,10 +54,10 @@ function App() {
 
   const views = {
     home: <HomeView vehicleState={vehicleState} onFilesSelected={(files) => { setUploadFiles(files); navigate('upload') }} />,
-    upload: <UploadView initialFiles={uploadFiles} {...confirmation} />,
-    vehicles: <VehiclesView vehicleState={vehicleState} />,
-    metrics: <MetricsView vehicleState={vehicleState} documentState={confirmation} />,
-    history: <HistoryView />,
+    upload: <UploadView initialFiles={uploadFiles} {...confirmation} historyState={historyState} now={now} />,
+    vehicles: <VehiclesView vehicleState={vehicleState} documentState={confirmation} historyState={historyState} now={now} />,
+    metrics: <MetricsView vehicleState={vehicleState} documentState={confirmation} historyState={historyState} now={now} />,
+    history: <HistoryView historyState={historyState} />,
     settings: <SettingsView theme={theme} onThemeChange={setTheme} />,
     help: <HelpView onNavigate={navigate} />,
   }

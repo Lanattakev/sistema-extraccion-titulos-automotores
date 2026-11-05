@@ -33,7 +33,7 @@ function render(state) {
     new Function('require', 'exports', compile(`../src/views/${name}.tsx`))(nodeRequire, component.exports)
     return component.exports
   }, module.exports)
-  return renderToStaticMarkup(createElement(module.exports.HistoryView))
+  return renderToStaticMarkup(createElement(module.exports.HistoryView, { historyState: state }))
 }
 
 function controller(getHistory) {

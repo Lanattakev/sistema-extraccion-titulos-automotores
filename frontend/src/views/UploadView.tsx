@@ -1,11 +1,15 @@
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { DocumentReview } from '../components/DocumentReview'
 import type { ConfirmationProps, ReviewedVehicle } from '../types/vehicles'
 import { Icon } from '../components/Icon'
 import { UploadArea } from '../components/UploadArea'
 import { StatusBadge } from '../components/StatusBadge'
+import { StateSortHeader } from '../components/StateSortHeader'
 import { uploadDocumentBatch } from '../services/api'
 import type { BatchDocumentResult } from '../types/documents'
+import type { HistoryState } from '../types/history'
+import { documentAgingLabel, documentLoadTimes, documentReviewTimes, filterAndPrioritizeDocuments, resultStatus } from '../utils/documentTiming'
+import type { PriorityOrder, DocumentFilter } from '../utils/documentTiming'
 import './UploadView.css'
 
 const extractedFields = [
@@ -13,15 +17,17 @@ const extractedFields = [
   ['numero_motor', 'Número de motor'], ['numero_chasis', 'Número de chasis'], ['anio', 'Año'],
 ] as const
 
-function BatchResult({ result, selected, onSelect, draft, onDraftChange, ...confirmationProps }: ConfirmationProps & {
+function BatchResult({ result, selected, onSelect, draft, onDraftChange, ageLabel, ...confirmationProps }: ConfirmationProps & {
   result: BatchDocumentResult
   selected: boolean
+  ageLabel: string
   draft?: ReviewedVehicle
   onDraftChange: (fields: ReviewedVehicle) => void
   onSelect: (selected: boolean) => void
 }) {
   const { confirmations, batchConfirmation } = confirmationProps
   const [reviewing, setReviewing] = useState(false)
+  const [expanded, setExpanded] = useState(false)
   const confirmation = result.id_documento ? confirmations[result.id_documento] : undefined
   const canReview = !!result.id_documento && result.fallo === false && !result.error
   const canSelect = canReview && !confirmation?.registered && !confirmation?.pending
@@ -31,15 +37,19 @@ function BatchResult({ result, selected, onSelect, draft, onDraftChange, ...conf
     : result.fallo === false ? 'ready' : null
 
   return (
-    <li className={`batch-result${selected && canSelect ? ' is-selected' : ''}`}>
-      <div className="batch-result-heading">
-        <input type="checkbox" aria-label={`Seleccionar ${result.nombre_original ?? result.id_documento}`} checked={selected && canSelect} disabled={!canSelect || batchConfirmation?.running} onChange={(event) => onSelect(event.target.checked)} />
-        <span className="file-icon"><Icon name="file" /></span>
-        <h3>{result.nombre_original ?? 'Nombre no informado'}</h3>
+    <Fragment>
+      <tr className={selected && canSelect ? 'document-row is-selected' : 'document-row'}>
+        <td><input type="checkbox" aria-label={`Seleccionar ${result.nombre_original ?? result.id_documento}`} checked={selected && canSelect} disabled={!canSelect || batchConfirmation?.running} onChange={(event) => onSelect(event.target.checked)} /></td>
+        <td><strong>{result.nombre_original ?? 'Nombre no informado'}</strong>{result.error && <small>{result.error}</small>}{confirmation?.error && <small role="alert">{confirmation.error}</small>}</td>
+        <td>
         {canReview && !confirmation?.registered
-          ? <button className="review-trigger" type="button" onClick={() => setReviewing(true)} disabled={confirmation?.pending || batchConfirmation?.running} aria-expanded={reviewing}><StatusBadge status={confirmation?.reviewed ? 'reviewed' : 'pending-review'} /></button>
+          ? <button className="review-trigger" type="button" onClick={() => { setExpanded(true); setReviewing(true) }} disabled={confirmation?.pending || batchConfirmation?.running} aria-expanded={expanded && reviewing}><StatusBadge status={confirmation?.reviewed ? 'reviewed' : 'pending-review'} /></button>
           : status ? <StatusBadge status={status} /> : <span className="subtle-tag">Estado no informado</span>}
-      </div>
+        </td>
+        <td className="document-aging"><strong>{ageLabel}</strong><small>{status === 'pending-review' ? 'En espera de revisión' : status === 'reviewed' || status === 'registered' ? 'Hasta la primera revisión' : 'Tiempo no disponible'}</small></td>
+        <td><button className="text-button" type="button" aria-expanded={expanded} aria-label={`${expanded ? 'Cerrar' : 'Ver'} detalle de ${result.nombre_original ?? result.id_documento}`} onClick={() => setExpanded(current => !current)}>{expanded ? 'Cerrar detalle' : 'Ver detalle'}</button>{confirmation?.pending && <small role="status">{confirmation.savingReview ? 'Guardando revisión...' : 'Registrando documento...'}</small>}</td>
+      </tr>
+      {expanded && <tr className="detail-row"><td colSpan={5}><div className="batch-result">
       <dl className="batch-fields">
         <div className="document-id"><dt>ID del documento</dt><dd>{result.id_documento ?? 'No informado'}</dd></div>
         {extractedFields.map(([key, label]) => <div key={key}><dt>{label}</dt><dd>{(confirmation?.registered?.vehicle[key] ?? confirmation?.reviewed?.[key] ?? result[key]) ?? 'No informado'}</dd></div>)}
@@ -51,17 +61,24 @@ function BatchResult({ result, selected, onSelect, draft, onDraftChange, ...conf
       {confirmation?.pending && <p role="status">{confirmation.savingReview ? 'Guardando revisión...' : 'Registrando documento...'}</p>}
       {confirmation?.registered && <div className="registration-success" role="status"><Icon name="check" /><div><strong>Vehículo registrado correctamente.</strong><p>{confirmation.registered.vehicle.patente} · ID {confirmation.registered.id_interno}</p></div></div>}
       {reviewing && canReview && !confirmation?.registered && <DocumentReview result={result} draft={draft} onDraftChange={onDraftChange} {...confirmationProps} onInvalidateReview={(id) => { onSelect(false); confirmationProps.onInvalidateReview(id) }} onClose={() => setReviewing(false)} />}
-    </li>
+      </div></td></tr>}
+    </Fragment>
   )
 }
 
-export function UploadView({ initialFiles = [], ...confirmationProps }: ConfirmationProps & { initialFiles?: File[] }) {
+export function UploadView({ initialFiles = [], historyState, now, ...confirmationProps }: ConfirmationProps & { initialFiles?: File[]; historyState: HistoryState; now: Date }) {
   const { confirmations, batchConfirmation, onConfirmSelected } = confirmationProps
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [drafts, setDrafts] = useState<Record<string, ReviewedVehicle>>({})
   const [files, setFiles] = useState<File[]>(initialFiles)
   const [batchResults, setResults] = useState<BatchDocumentResult[] | null>(null)
-  const results = batchResults ?? confirmationProps.persistedDocuments
+  const [statusFilter, setStatusFilter] = useState<DocumentFilter>('todos')
+  const [priorityOrder, setPriorityOrder] = useState<PriorityOrder>('normal')
+  const loaded = documentLoadTimes(historyState.events ?? [], now)
+  const reviewed = documentReviewTimes(historyState.events ?? [], loaded, now)
+  const sourceResults = batchResults ?? confirmationProps.persistedDocuments
+  const results = filterAndPrioritizeDocuments(sourceResults, statusFilter, priorityOrder, loaded, confirmations, confirmationProps.persistedDocuments)
+  const timingAvailable = !historyState.loading && !historyState.error && historyState.events !== null
   const [reviewingBatch, setReviewingBatch] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -110,6 +127,7 @@ export function UploadView({ initialFiles = [], ...confirmationProps }: Confirma
       await Promise.all(candidates.map(({ id, fields }) => confirmationProps.onMarkReviewed(id, fields)))
     } finally {
       setReviewingBatch(false)
+      await historyState.refresh()
     }
   }
 
@@ -142,7 +160,7 @@ export function UploadView({ initialFiles = [], ...confirmationProps }: Confirma
       if (!controller.signal.aborted) {
         setResults(batch)
         setFiles([])
-        await confirmationProps.refreshDocuments()
+        await Promise.all([confirmationProps.refreshDocuments(), historyState.refresh()])
       }
     } catch (cause) {
       if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'Ocurrió un error al procesar el lote.')
@@ -171,6 +189,18 @@ export function UploadView({ initialFiles = [], ...confirmationProps }: Confirma
       </section>
       {error && <div className="batch-alert" role="alert"><strong>No se completó el procesamiento.</strong><p>{error}</p><p>Los archivos siguen seleccionados. Podés volver a intentar el envío.</p></div>}
       {confirmationProps.documentsLoading && <p role="status">Recuperando documentos guardados...</p>}
+      {historyState.loading && <p className="vehicle-feedback" role="status">Recuperando fechas de carga…</p>}
+      {historyState.error && <div className="batch-alert" role="alert"><p>No se pudo calcular la antigüedad. {historyState.error}</p><button className="text-button" type="button" onClick={() => void historyState.refresh()}>Reintentar historial</button></div>}
+      <section className="panel" aria-label="Filtros de documentos">
+        <div className="list-controls">
+          <label htmlFor="document-status">Estado
+            <select id="document-status" value={statusFilter} onChange={event => setStatusFilter(event.target.value as DocumentFilter)}>
+              <option value="todos">Todos</option><option value="pendiente">Pendientes</option><option value="revisado">Revisados</option><option value="registrado">Registrados</option>
+            </select>
+          </label>
+          <span role="status">{results.length} de {sourceResults.length} documento(s)</span>
+        </div>
+      </section>
       {confirmationProps.documentsError && <div className="batch-alert" role="alert"><p>{confirmationProps.documentsError}</p><button className="text-button" type="button" onClick={() => void confirmationProps.refreshDocuments()}>Reintentar consulta</button></div>}
       <section className="panel" aria-label="Confirmación múltiple">
         <div className="batch-actions" role="status" aria-live="polite">
@@ -194,7 +224,7 @@ export function UploadView({ initialFiles = [], ...confirmationProps }: Confirma
         </div>
         {batchConfirmation && <div className="bulk-summary" role="status" aria-live="polite"><p>{batchConfirmation.running ? 'Confirmando documentos' : 'Confirmación finalizada'}: {batchConfirmation.completed} de {batchConfirmation.total}</p><progress max={batchConfirmation.total} value={batchConfirmation.completed} aria-label="Progreso de confirmación" /><p>{batchConfirmation.registered.length} registrado(s) · {batchConfirmation.failed.length} fallido(s)</p>{batchConfirmation.registered.length > 0 && <p>Registrados: {batchConfirmation.registered.map((id) => results?.find((result) => result.id_documento === id)?.nombre_original ?? id).join(', ')}</p>}{batchConfirmation.failed.length > 0 && <p>No registrados: {batchConfirmation.failed.map((id) => results?.find((result) => result.id_documento === id)?.nombre_original ?? id).join(', ')}</p>}</div>}
       </section>
-      {results !== null && <section className="panel" aria-labelledby="results-title"><div className="panel-heading"><div><h2 id="results-title">Resultados del lote</h2><p>Información devuelta por el servidor. Los campos ausentes se muestran como “No informado”.</p></div></div>{results.length ? <ul className="batch-results">{results.map((result, index) => <BatchResult {...confirmationProps} draft={result.id_documento ? drafts[result.id_documento] : undefined} onDraftChange={(fields) => { if (result.id_documento) { const id = result.id_documento; setDrafts((current) => ({ ...current, [id]: fields })) } }} selected={!!result.id_documento && selectedIds.has(result.id_documento)} onSelect={(checked) => { if (!result.id_documento || batchConfirmation?.running) return; const id = result.id_documento; const state = confirmations[id]; if (checked && (state?.pending || state?.registered || result.fallo !== false || result.error)) return; setSelectedIds((current) => { const next = new Set(current); if (checked) next.add(id); else next.delete(id); return next }) }} key={`${result.id_documento ?? 'document'}-${index}`} result={result} />)}</ul> : <p className="batch-empty">El servidor no devolvió resultados para este lote.</p>}</section>}
+      {results !== null && <section className="panel" aria-labelledby="results-title"><div className="panel-heading"><div><h2 id="results-title">Resultados del lote</h2><p>Información devuelta por el servidor. Los campos ausentes se muestran como “No informado”.</p></div></div>{results.length ? <div className="table-scroll"><table className="documents-table"><caption className="sr-only">Documentos del flujo y tiempo hasta su primera revisión.</caption><thead><tr><th scope="col">Seleccionar</th><th scope="col">Documento</th><StateSortHeader order={priorityOrder} onChange={setPriorityOrder} /><th scope="col">Tiempo / Aging</th><th scope="col">Acciones</th></tr></thead><tbody>{results.map((result, index) => <BatchResult {...confirmationProps} ageLabel={timingAvailable ? documentAgingLabel(result.id_documento, resultStatus(result, confirmations, confirmationProps.persistedDocuments), loaded, reviewed, now) : 'Fecha no disponible'} onMarkReviewed={async (id, fields) => { await confirmationProps.onMarkReviewed(id, fields); await historyState.refresh() }} draft={result.id_documento ? drafts[result.id_documento] : undefined} onDraftChange={(fields) => { if (result.id_documento) { const id = result.id_documento; setDrafts((current) => ({ ...current, [id]: fields })) } }} selected={!!result.id_documento && selectedIds.has(result.id_documento)} onSelect={(checked) => { if (!result.id_documento || batchConfirmation?.running) return; const id = result.id_documento; const state = confirmations[id]; if (checked && (state?.pending || state?.registered || result.fallo !== false || result.error)) return; setSelectedIds((current) => { const next = new Set(current); if (checked) next.add(id); else next.delete(id); return next }) }} key={result.id_documento ?? `document-${index}`} result={result} />)}</tbody></table></div> : <p className="batch-empty">No hay documentos que coincidan con el filtro seleccionado.</p>}</section>}
     </div>
   )
 }

@@ -172,6 +172,40 @@ td small { font-size: 12px; }
 .panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 26px 28px; }
 .vehicles-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 12px; margin-left: auto; }
 .vehicles-actions .primary-button { margin: 0; }
+.daily-details { white-space: normal; }
+.daily-details summary { cursor: pointer; color: var(--green); font-size: 13px; padding-block: 8px; }
+.daily-activity { margin: 12px 0; min-width: 360px; font-size: 12px; }
+.daily-activity figcaption strong { font-size: 14px; }
+.daily-activity figcaption p, .daily-note { color: var(--muted); line-height: 1.7; margin-block: 8px; }
+.daily-legend { display: flex; flex-wrap: wrap; gap: 18px; margin-block: 14px; }
+.daily-legend > span { display: inline-flex; align-items: center; gap: 7px; }
+.daily-legend i { width: 12px; height: 12px; border-radius: 3px; }
+.daily-pending { background: #c49c46; }
+.daily-registered { background: var(--green); }
+.daily-totals { line-height: 1.8; margin-block: 12px; }
+.daily-bars { list-style: none; margin: 0; padding: 0; }
+.daily-bars li { display: grid; grid-template-columns: 86px minmax(50px, 1fr) auto; gap: 12px; align-items: center; padding-block: 8px; border-bottom: 1px solid var(--line); }
+.daily-bars time, .daily-values { font-variant-numeric: tabular-nums; }
+.daily-bars time small { display: block; color: var(--muted); font-size: 10px; }
+.daily-stack { display: flex; height: 18px; background: var(--soft); border-radius: 4px; overflow: hidden; }
+.daily-stack > span { display: block; height: 100%; }
+.state-sort-button { display: inline-flex; align-items: center; gap: 6px; padding: 4px 0; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.state-sort-button:focus-visible { outline: 2px solid var(--green); outline-offset: 4px; border-radius: 3px; }
+.period-activity { margin: 0; padding: 0 28px 24px; }
+.period-activity figcaption p, .period-totals { color: var(--muted); font-size: 12px; line-height: 1.7; }
+.period-legend { display: flex; flex-wrap: wrap; gap: 16px; font-size: 12px; margin-bottom: 12px; }
+.period-legend > span { display: inline-flex; align-items: center; gap: 7px; }
+.period-legend i { width: 12px; height: 12px; border-radius: 3px; }
+.period-registered { background: #3274c7; }
+.period-pending { background: #e3b93f; }
+.period-bars { list-style: none; padding: 0; margin: 18px 0; }
+.period-bars li { display: grid; grid-template-columns: 80px minmax(70px, 1fr) auto; gap: 12px; align-items: start; padding: 14px 0; border-bottom: 1px solid var(--line); font-size: 12px; font-variant-numeric: tabular-nums; }
+.period-label small { display: block; color: var(--muted); font-size: 10px; margin-top: 5px; }
+.period-stack { display: flex; flex-direction: row; height: 22px; background: var(--soft); border-radius: 4px; overflow: hidden; }
+.period-stack > span { display: block; height: 100%; }
+.period-values { display: block; margin-top: 7px; font-size: 11px; color: var(--muted); line-height: 1.6; }
+.period-total { white-space: nowrap; padding-top: 3px; }
+@media (max-width: 680px) { .period-activity { padding-inline: 18px; } .period-bars li { grid-template-columns: 68px minmax(50px, 1fr) auto; gap: 8px; } }
 .demo-label { white-space: nowrap; font-size: 11px; }
 .notice { display: flex; align-items: flex-start; gap: 12px; background: var(--soft); border: 1px solid var(--line); border-radius: 10px; color: var(--green); padding: 17px 20px; }
 .notice p { font-size: 13px; line-height: 1.8; }

@@ -1,8 +1,7 @@
 import { Icon } from '../components/Icon'
 import { StatusBadge } from '../components/StatusBadge'
 import type { DocumentStatus } from '../components/StatusBadge'
-import { useHistory } from '../hooks/useHistory'
-import type { HistoryEvent } from '../types/history'
+import type { HistoryEvent, HistoryState } from '../types/history'
 
 const actions: Record<HistoryEvent['tipo_evento'], { title: string; status: DocumentStatus }> = {
   documento_cargado: { title: 'Documento cargado', status: 'pending-review' },
@@ -10,8 +9,8 @@ const actions: Record<HistoryEvent['tipo_evento'], { title: string; status: Docu
   documento_registrado: { title: 'Documento registrado', status: 'registered' },
 }
 
-export function HistoryView() {
-  const { events, loading, error, refresh } = useHistory()
+export function HistoryView({ historyState }: { historyState: HistoryState }) {
+  const { events, loading, error, refresh } = historyState
   return (
     <section className="panel" aria-labelledby="history-title">
       <div className="panel-heading"><div><h2 id="history-title">Operaciones recientes</h2><p>Eventos guardados del ciclo documental, del más reciente al más antiguo.</p></div><button className="text-button" type="button" disabled={loading} onClick={() => void refresh()}>Actualizar</button></div>
