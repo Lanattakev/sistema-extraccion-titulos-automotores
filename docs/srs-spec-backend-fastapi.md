@@ -179,6 +179,7 @@
   from pydantic import Field
   from pydantic_settings import BaseSettings, SettingsConfigDict
 
+
   class Settings(BaseSettings):
       model_config = SettingsConfigDict(
           env_file=".env",
@@ -205,6 +206,7 @@
       # Base de Datos
       DATABASE_URL: str = Field(default="sqlite+aiosqlite:///./app.db")
 
+
   @lru_cache()
   def get_settings() -> Settings:
       return Settings()
@@ -217,10 +219,11 @@
   import sys
   from src.infrastructure.settings.config import get_settings
 
+
   def setup_logging() -> logging.Logger:
       settings = get_settings()
       log_level = getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO)
-      
+
       logging.basicConfig(
           level=log_level,
           format="%(asctime)s | %(levelname)-8s | %(name)s:%(funcName)s:%(lineno)d - %(message)s",
@@ -229,6 +232,7 @@
       logger = logging.getLogger(settings.PROJECT_NAME)
       logger.setLevel(log_level)
       return logger
+
 
   logger = setup_logging()
   ```

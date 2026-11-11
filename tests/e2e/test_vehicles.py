@@ -18,8 +18,12 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
 def payload() -> dict[str, str | int]:
     return {
-        "patente": " ab123cd ", "marca": "Toyota", "modelo": "Corolla",
-        "numero_motor": "motor1", "numero_chasis": "chasis1", "anio": 2020,
+        "patente": " ab123cd ",
+        "marca": "Toyota",
+        "modelo": "Corolla",
+        "numero_motor": "motor1",
+        "numero_chasis": "chasis1",
+        "anio": 2020,
         "archivo_origen": "titulos/auto.pdf",
     }
 
@@ -47,10 +51,17 @@ def test_missing_vehicle(client: TestClient) -> None:
     assert client.get("/api/v1/vehicles/missing").status_code == 404
 
 
-@pytest.mark.parametrize("field,value", [
-    ("patente", " "), ("archivo_origen", " "), ("anio", 0),
-    ("anio", True), ("anio", "2020"), ("marca", None),
-])
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("patente", " "),
+        ("archivo_origen", " "),
+        ("anio", 0),
+        ("anio", True),
+        ("anio", "2020"),
+        ("marca", None),
+    ],
+)
 def test_invalid_vehicle(client: TestClient, field: str, value: object) -> None:
     body = dict(payload())
     body[field] = value

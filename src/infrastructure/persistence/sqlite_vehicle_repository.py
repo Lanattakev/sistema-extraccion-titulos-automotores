@@ -113,10 +113,17 @@ class SQLiteVehicleRepository(VehicleRepository):
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                intake.id_interno, intake.fecha_ingreso.isoformat(),
-                intake.archivo_origen, int(intake.requiere_revision),
-                vehicle.patente, vehicle.marca, vehicle.modelo,
-                vehicle.numero_motor, vehicle.numero_chasis, vehicle.anio, number,
+                intake.id_interno,
+                intake.fecha_ingreso.isoformat(),
+                intake.archivo_origen,
+                int(intake.requiere_revision),
+                vehicle.patente,
+                vehicle.marca,
+                vehicle.modelo,
+                vehicle.numero_motor,
+                vehicle.numero_chasis,
+                vehicle.anio,
+                number,
             ),
         )
         intake.numero_registro = number
@@ -134,17 +141,18 @@ class SQLiteVehicleRepository(VehicleRepository):
         """Lista los ingresos en orden de insercion."""
         with closing(sqlite3.connect(self._db_path)) as connection:
             connection.row_factory = sqlite3.Row
-            rows = connection.execute(
-                "SELECT * FROM vehicle_intakes ORDER BY rowid"
-            ).fetchall()
+            rows = connection.execute("SELECT * FROM vehicle_intakes ORDER BY rowid").fetchall()
         return [self._from_row(row) for row in rows]
 
     @staticmethod
     def _from_row(row: sqlite3.Row) -> VehicleIntake:
         return VehicleIntake(
             vehicle=VehicleRecord(
-                patente=row["patente"], marca=row["marca"], modelo=row["modelo"],
-                numero_motor=row["numero_motor"], numero_chasis=row["numero_chasis"],
+                patente=row["patente"],
+                marca=row["marca"],
+                modelo=row["modelo"],
+                numero_motor=row["numero_motor"],
+                numero_chasis=row["numero_chasis"],
                 anio=row["anio"],
             ),
             id_interno=row["id_interno"],

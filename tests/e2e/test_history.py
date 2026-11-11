@@ -12,8 +12,12 @@ from src.main import create_app
 from tests.test_documents import make_pdf
 
 FIELDS = {
-    "patente": "AB123CD", "marca": "Toyota", "modelo": "Corolla",
-    "numero_motor": "M123", "numero_chasis": "C456", "anio": 2020,
+    "patente": "AB123CD",
+    "marca": "Toyota",
+    "modelo": "Corolla",
+    "numero_motor": "M123",
+    "numero_chasis": "C456",
+    "anio": 2020,
 }
 
 
@@ -26,9 +30,12 @@ def client(monkeypatch, tmp_path):
 
 
 def upload(client):
-    response = client.post("/api/v1/documents/batch", files=[
-        ("files", ("titulo.pdf", make_pdf("Dominio: AB123CD"))),
-    ])
+    response = client.post(
+        "/api/v1/documents/batch",
+        files=[
+            ("files", ("titulo.pdf", make_pdf("Dominio: AB123CD"))),
+        ],
+    )
     assert response.status_code == 200
     assert response.json()[0]["fallo"] is False
     return response.json()[0]["id_documento"]
@@ -52,14 +59,22 @@ def test_real_lifecycle_events_are_persistent_and_newest_first(client):
     history = client.get("/api/v1/history").json()
     finished = datetime.now(timezone.utc)
     assert [event["tipo_evento"] for event in history] == [
-        "documento_registrado", "documento_revisado", "documento_cargado",
+        "documento_registrado",
+        "documento_revisado",
+        "documento_cargado",
     ]
     assert len({event["id_evento"] for event in history}) == 3
     for event in history:
         assert str(UUID(event["id_evento"])) == event["id_evento"]
         assert event["id_documento"] == document_id
         assert event["nombre_original"] == "titulo.pdf"
-        assert set(event) == {"id_evento", "id_documento", "tipo_evento", "fecha_evento", "nombre_original"}
+        assert set(event) == {
+            "id_evento",
+            "id_documento",
+            "tipo_evento",
+            "fecha_evento",
+            "nombre_original",
+        }
         assert started <= datetime.fromisoformat(event["fecha_evento"]) <= finished
     dates = [datetime.fromisoformat(event["fecha_evento"]) for event in history]
     assert dates == sorted(dates, reverse=True)
@@ -72,9 +87,12 @@ def test_real_lifecycle_events_are_persistent_and_newest_first(client):
 
 
 def test_repeated_extraction_and_identical_review_do_not_duplicate_events(client):
-    response = client.post("/api/v1/documents", files={
-        "file": ("titulo.pdf", make_pdf("Dominio: AB123CD")),
-    })
+    response = client.post(
+        "/api/v1/documents",
+        files={
+            "file": ("titulo.pdf", make_pdf("Dominio: AB123CD")),
+        },
+    )
     path = f"/api/v1/documents/{response.json()['id_documento']}"
     for _ in range(2):
         assert client.post(path + "/extract-fields").status_code == 200
@@ -103,16 +121,21 @@ def test_failed_operations_do_not_create_success_events(client):
     assert client.get("/api/v1/history").json() == before
     assert client.patch(path + "/review", json=FIELDS).status_code == 200
     before = client.get("/api/v1/history").json()
-    assert client.post(path + "/confirm", json={**FIELDS, "modelo": "Sin guardar"}).status_code == 409
+    assert (
+        client.post(path + "/confirm", json={**FIELDS, "modelo": "Sin guardar"}).status_code == 409
+    )
     assert client.get("/api/v1/history").json() == before
 
 
 def test_batch_only_records_successful_processing_including_incomplete_fields(client):
-    response = client.post("/api/v1/documents/batch", files=[
-        ("files", ("uno.pdf", make_pdf("Dominio: AB123CD"))),
-        ("files", ("roto.pdf", b"invalid pdf")),
-        ("files", ("tres.pdf", make_pdf("Dominio: CD456EF"))),
-    ])
+    response = client.post(
+        "/api/v1/documents/batch",
+        files=[
+            ("files", ("uno.pdf", make_pdf("Dominio: AB123CD"))),
+            ("files", ("roto.pdf", b"invalid pdf")),
+            ("files", ("tres.pdf", make_pdf("Dominio: CD456EF"))),
+        ],
+    )
     assert [item["fallo"] for item in response.json()] == [False, True, False]
     history = client.get("/api/v1/history").json()
     assert [event["nombre_original"] for event in history] == ["tres.pdf", "uno.pdf"]
