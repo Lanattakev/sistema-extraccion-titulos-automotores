@@ -84,6 +84,8 @@ Con el entorno activado y desde la raíz:
 ```bash
 pytest -q
 ruff check .
+ruff format --check .
+pyright src/
 ```
 
 `pytest` ejecuta la suite configurada en `tests/`; `ruff check .` informa problemas de lint sin corregir archivos. La existencia de estas verificaciones no garantiza precisión de extracción sobre cualquier formato de título.
@@ -259,3 +261,64 @@ La suite completa y las auditorias siguen usando los comandos anteriores.
 Esta etapa no actualiza dependencias ni herramientas (#5), no agrega formatos,
 servicios externos o nuevos endpoints y no completa el SRS (#6). Las verificaciones
 con documentos sinteticos y OCR simulado no certifican precision sobre titulos reales.
+
+
+## Calidad y robustez (issue #5)
+
+La construccion de los PDF sinteticos incorpora cada pagina al `PdfWriter` antes
+de combinar contenido, compatible con pypdf 6.20.1 y 7.0.0. Se mantiene el minimo
+`pypdf>=6.20.1`; el workflow de calidad comprueba ambas versiones.
+
+`TESSERACT_TIMEOUT` es un entero positivo (segundos); valores fraccionarios,
+no numericos o no positivos se rechazan. `TESSERACT_CMD` conserva el valor por
+defecto de Windows. En Linux/macOS se busca `tesseract` con `shutil.which` y se usa
+el nombre del comando si no esta instalado; las variables de entorno y el `.env`
+siguen teniendo precedencia. Esta deteccion no instala Tesseract ni sus idiomas.
+
+`BatchDocumentResult` y `ProposedVehicleFields` son DTOs independientes: un resultado
+de lote fallido admite ID nulo y `requiere_revision=false`, mientras que una propuesta
+requiere ID y revision humana. Separarlos evita herencia mutable incompatible sin
+ampliar los tipos publicos de una propuesta ni alterar sus respuestas JSON/OpenAPI.
+Las validaciones de dominio para llamadas Python siguen rechazando tipos invalidos.
+
+`pyrightconfig.json` activa comprobacion estricta sobre todo `src/`, con sintaxis
+Python 3.10 y el entorno `.venv`. No desactiva diagnosticos. `typings/` contiene
+stubs locales de la superficie utilizada de pytesseract y pypdfium2, bibliotecas
+sin stubs publicados para estos imports. Se contrastaron con pytesseract 0.3.13
+y pypdfium2 5.14.0; deben revisarse al cambiar sus APIs. No sustituyen codigo en
+runtime ni certifican toda la API de esas bibliotecas.
+
+Ruff 0.16.8 y Pyright 1.1.414 estan fijados en las dependencias de desarrollo.
+Pre-commit usa la misma version de Ruff y ejecuta las auditorias con UTF-8.
+`.vscode/settings.json` comparte el entorno, el modo estricto y el formato; los
+demas ajustes personales del editor siguen ignorados. `.pytest_tmp/` se ignora
+como directorio generado y Ruff no intenta recorrerlo; no se excluye codigo fuente.
+El formato global tambien normalizo espacios en ejemplos Python del SRS, sin
+completar ni cambiar su contenido funcional, reservado para #6.
+
+El workflow `.github/workflows/quality.yml` ejecuta lint, formato, Pyright, las tres
+auditorias y pytest en PRs y pushes a main. Incluye Linux con Python 3.10/pypdf 6.20.1,
+Linux con Python 3.13/pypdf 7.0.0 y Windows con Python 3.13/pypdf 7.0.0. Usa permisos
+de lectura y no necesita el binario OCR porque las pruebas usan simulaciones.
+El resultado de CI se confirma en GitHub para cada commit; el archivo de workflow
+por si solo no constituye una ejecucion aprobada.
+
+Desde la raiz del repositorio en PowerShell:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python.exe -m pip check
+.\.venv\Scripts\python.exe -m ruff check .
+.\.venv\Scripts\python.exe -m ruff format --check .
+.\.venv\Scripts\python.exe -m pyright src/
+.\.venv\Scripts\python.exe -X utf8 tests/test_architecture.py
+.\.venv\Scripts\python.exe -X utf8 tests/test_clean_design.py --strict
+.\.venv\Scripts\python.exe -X utf8 tests/test_god_components.py --strict
+.\.venv\Scripts\python.exe -X utf8 -m pytest -q
+```
+
+Para comprobar especificamente pypdf 7.0.0 en un entorno de desarrollo, instalar
+`python -m pip install "pypdf==7.0.0"` antes de ejecutar la suite. La advertencia
+de compatibilidad Starlette/HTTPX sigue visible; no se modifica ni se oculta.
+El OCR con documentos reales, autenticacion y preparacion para produccion no
+quedan certificados por estas herramientas.
