@@ -5,17 +5,17 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, model_validator
 
+from src.domain.repositories import VehicleRepository
 from src.domain.vehicle_record import VehicleIntake, VehicleRecord
-from src.infrastructure.persistence.sqlite_vehicle_repository import SQLiteVehicleRepository
 
 router = APIRouter(prefix="/vehicles", tags=["Vehicles"])
 
 
-def get_vehicle_repository(request: Request) -> SQLiteVehicleRepository:
+def get_vehicle_repository(request: Request) -> VehicleRepository:
     return request.app.state.vehicle_repository
 
 
-Repository = Annotated[SQLiteVehicleRepository, Depends(get_vehicle_repository)]
+Repository = Annotated[VehicleRepository, Depends(get_vehicle_repository)]
 
 
 class ReviewedVehicleRequest(BaseModel):

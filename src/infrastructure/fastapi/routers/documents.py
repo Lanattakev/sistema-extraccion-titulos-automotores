@@ -10,6 +10,13 @@ from starlette.datastructures import UploadFile
 
 from src.application.title_field_extraction import ProposedVehicleFields, extract_title_fields
 from src.domain.document_record import DocumentRecord
+from src.domain.repositories import (
+    DocumentConflictError,
+    DocumentNotFoundError,
+)
+from src.domain.repositories import (
+    DocumentRepository as DocumentRepositoryProtocol,
+)
 from src.domain.vehicle_record import VehicleIntake
 from src.infrastructure.fastapi.routers.vehicles import ReviewedVehicleRequest
 from src.infrastructure.image_text_extraction import extract_image_text
@@ -21,21 +28,16 @@ from src.infrastructure.persistence.local_document_storage import (
     InvalidDocument,
     save_document,
 )
-from src.infrastructure.persistence.sqlite_document_repository import (
-    DocumentConflictError,
-    DocumentNotFoundError,
-    SQLiteDocumentRepository,
-)
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 logger = logging.getLogger(__name__)
 
 
-def get_document_repository(request: Request) -> SQLiteDocumentRepository:
+def get_document_repository(request: Request) -> DocumentRepositoryProtocol:
     return request.app.state.document_repository
 
 
-DocumentRepository = Annotated[SQLiteDocumentRepository, Depends(get_document_repository)]
+DocumentRepository = Annotated[DocumentRepositoryProtocol, Depends(get_document_repository)]
 
 
 @router.get("", response_model=list[DocumentRecord])
@@ -81,7 +83,7 @@ async def create_document_batch(request: Request, repository: DocumentRepository
         return results
 
 
-async def process_batch_file(file: UploadFile | str, repository: SQLiteDocumentRepository) -> BatchDocumentResult:
+async def process_batch_file(file: UploadFile | str, repository: DocumentRepositoryProtocol) -> BatchDocumentResult:
     result = BatchDocumentResult(
         nombre_original=(file.filename or "") if isinstance(file, UploadFile) else "",
     )

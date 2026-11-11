@@ -6,20 +6,21 @@ from dataclasses import asdict
 from pathlib import Path
 
 from src.domain.document_record import DocumentRecord
+from src.domain.repositories import (
+    DocumentConflictError as DocumentConflictError,
+)
+from src.domain.repositories import (
+    DocumentNotFoundError as DocumentNotFoundError,
+)
+from src.domain.repositories import (
+    DocumentRepository,
+)
 from src.domain.vehicle_record import VehicleIntake, VehicleRecord
 from src.infrastructure.persistence.sqlite_history_repository import SQLiteHistoryRepository
 from src.infrastructure.persistence.sqlite_vehicle_repository import SQLiteVehicleRepository
 
 
-class DocumentNotFoundError(LookupError):
-    """El documento no tiene un flujo persistido."""
-
-
-class DocumentConflictError(ValueError):
-    """El documento ya fue registrado o la revision cambio."""
-
-
-class SQLiteDocumentRepository:
+class SQLiteDocumentRepository(DocumentRepository):
     def __init__(self, db_path: str | Path) -> None:
         self._db_path = str(db_path)
         with closing(self._connect()) as connection, connection:
