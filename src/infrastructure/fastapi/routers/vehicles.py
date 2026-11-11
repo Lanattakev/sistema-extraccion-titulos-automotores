@@ -3,10 +3,16 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel, ConfigDict, model_validator
 
+from src.application.dtos.vehicle_dtos import (
+    CreateVehicleRequest as CreateVehicleRequest,
+)
+from src.application.dtos.vehicle_dtos import (
+    ReviewedVehicleRequest as ReviewedVehicleRequest,
+)
+from src.application.use_cases.vehicle_intake import CreateVehicleUseCase
 from src.domain.repositories import VehicleRepository
-from src.domain.vehicle_record import VehicleIntake, VehicleRecord
+from src.domain.vehicle_record import VehicleIntake
 
 router = APIRouter(prefix="/vehicles", tags=["Vehicles"])
 
@@ -18,45 +24,16 @@ def get_vehicle_repository(request: Request) -> VehicleRepository:
 Repository = Annotated[VehicleRepository, Depends(get_vehicle_repository)]
 
 
-class ReviewedVehicleRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
-
-    patente: str
-    marca: str
-    modelo: str
-    numero_motor: str
-    numero_chasis: str
-    anio: int
-
-    def to_vehicle(self) -> VehicleRecord:
-        return VehicleRecord(**self.model_dump(exclude={"archivo_origen"}))
-
-    @model_validator(mode="after")
-    def validate_vehicle(self) -> "ReviewedVehicleRequest":
-        self.to_vehicle()
-        return self
-
-
-class CreateVehicleRequest(ReviewedVehicleRequest):
-    archivo_origen: str
-
-    def to_intake(self) -> VehicleIntake:
-        return VehicleIntake(
-            vehicle=self.to_vehicle(),
-            archivo_origen=self.archivo_origen,
-        )
-
-    @model_validator(mode="after")
-    def validate_domain(self) -> "CreateVehicleRequest":
-        self.to_intake()
-        return self
+def get_create_vehicle_use_case(repository: Repository) -> CreateVehicleUseCase:
+    return CreateVehicleUseCase(repository)
 
 
 @router.post("", response_model=VehicleIntake, status_code=status.HTTP_201_CREATED)
-def create_vehicle(payload: CreateVehicleRequest, repository: Repository) -> VehicleIntake:
-    intake = payload.to_intake()
-    repository.save(intake)
-    return intake
+def create_vehicle(
+    payload: CreateVehicleRequest,
+    use_case: Annotated[CreateVehicleUseCase, Depends(get_create_vehicle_use_case)],
+) -> VehicleIntake:
+    return use_case.execute(payload)
 
 
 @router.get("", response_model=list[VehicleIntake])

@@ -1,19 +1,18 @@
 """src/infrastructure/persistence/local_document_storage.py"""
 
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import asdict
 from pathlib import Path
 from typing import BinaryIO
 from uuid import UUID, uuid4
 
-
-@dataclass
-class Document:
-    id_documento: str
-    nombre_original: str
-    nombre_interno: str
-    tipo_archivo: str
-    tamanio_bytes: int
+from src.application.document_errors import (
+    DocumentTooLarge as DocumentTooLarge,
+)
+from src.application.document_errors import (
+    InvalidDocument as InvalidDocument,
+)
+from src.application.dtos.document_dtos import Document as Document
 
 UPLOAD_DIRECTORY = Path(__file__).resolve().parents[3] / "uploads"
 MAX_DOCUMENT_BYTES = 10 * 1024 * 1024
@@ -23,14 +22,6 @@ FILE_TYPES = {
     ".jpeg": "image/jpeg",
     ".png": "image/png",
 }
-
-
-class InvalidDocument(ValueError):
-    """Nombre, extension o contenido vacio no admitidos."""
-
-
-class DocumentTooLarge(ValueError):
-    """El documento supera el limite permitido."""
 
 
 def get_document(document_id: str) -> Document:
