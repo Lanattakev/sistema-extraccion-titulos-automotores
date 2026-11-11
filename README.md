@@ -94,6 +94,8 @@ ruff check .
 src/
   main.py                          # Aplicación ASGI e inicialización
   domain/vehicle_record.py         # Registros y validaciones
+  application/dtos/                # Datos de entrada, carga y resultados
+  application/use_cases/           # Carga, extraccion, revision, confirmacion y lotes
   application/title_field_extraction.py
                                    # Propuesta de campos sin I/O
   adapters/                        # Paquete sin adaptadores implementados
@@ -168,5 +170,47 @@ los contratos con SQLite y la compatibilidad de los errores. Desde la raiz, en P
 .\.venv\Scripts\python.exe -X utf8 tests/test_god_components.py --strict
 ```
 
-Esta etapa no mueve DTOs ni casos de uso (#3), no cambia los motores de extraccion
-(#4), no estabiliza herramientas ni formato global (#5) y no completa el SRS (#6).
+La etapa #2 agrego contratos sin mover los DTOs ni los casos de uso. La separacion
+de estos componentes se describe a continuacion para el issue #3.
+
+
+## Casos de uso y DTOs (issue #3)
+
+Los DTOs se definen en `src/application/dtos/`: entradas vehiculares estrictas,
+metadatos de documento, texto extraido, campos propuestos y resultados de lote.
+Los imports anteriores de los DTOs se conservan como reexportaciones de las mismas
+clases. La comparacion de OpenAPI anterior y posterior a esta etapa no presenta cambios.
+
+`src/application/use_cases/` coordina la carga, extraccion de texto y campos,
+revision, confirmacion, alta independiente y procesamiento por lote. Recibe
+repositorios de dominio y funciones inyectadas para el almacenamiento y los motores;
+no importa FastAPI, Starlette, SQLite, lectores PDF ni Tesseract. Los errores de
+carga y extraccion son independientes del transporte en `application/document_errors.py`.
+
+La capa HTTP valida el multipart, mantiene los limites existentes y delega en los
+casos de uso. `infrastructure/fastapi/document_dependencies.py` compone los casos
+con las implementaciones actuales y `document_http.py` traduce los errores a los
+mismos estados HTTP 400/404/409/413/415/422. Los endpoints no coordinan persistencia
+ni seleccionan motores de extraccion y no superan 20 lineas.
+
+El lote procesa un archivo por vez, en orden, ejecutando el trabajo bloqueante
+fuera del event loop mediante `asyncio.to_thread`. Cada fallo se devuelve por archivo
+y permite continuar; conserva el ID si el archivo se almaceno antes del error de
+extraccion. Una extraccion fallida no agrega un pendiente a SQLite, como antes.
+La API individual mantiene el registro pendiente despues de una carga correcta.
+La confirmacion y el historial conservan las transacciones SQLite existentes.
+
+`infrastructure/document_processing.py` aloja la seleccion anterior de PDF/JPEG/PNG;
+no cambia los motores ni el fallback OCR. Strategy y Factory corresponden al issue #4.
+Esta etapa tampoco actualiza herramientas (#5) ni completa el SRS (#6).
+
+Desde la raiz, las nuevas verificaciones aisladas pueden ejecutarse en PowerShell:
+
+```powershell
+.\.venv\Scripts\python.exe -X utf8 -m pytest -q tests/unit/test_document_use_cases.py tests/unit/test_document_http_contracts.py
+```
+
+La suite completa y las auditorias se ejecutan con los comandos de la seccion anterior.
+Las pruebas usan documentos sinteticos y OCR simulado; no certifican precision de
+Tesseract con titulos reales. La ejecucion del servidor sigue siendo
+`python -m uvicorn src.main:app --reload --host 127.0.0.1 --port 8000`.
