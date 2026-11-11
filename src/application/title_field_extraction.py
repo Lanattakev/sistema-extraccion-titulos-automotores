@@ -4,21 +4,8 @@ Propuestas conservadoras a partir del texto de un titulo, sin I/O.
 """
 
 import re
-from dataclasses import dataclass
-from typing import Literal
 
-
-@dataclass
-class ProposedVehicleFields:
-    id_documento: str
-    patente: str | None = None
-    marca: str | None = None
-    modelo: str | None = None
-    numero_motor: str | None = None
-    numero_chasis: str | None = None
-    anio: int | None = None
-    requiere_revision: Literal[True] = True
-
+from src.application.dtos.document_dtos import ProposedVehicleFields as ProposedVehicleFields
 
 _NUMBER = r"(?:n[uú]mero\s*(?:de\s+)?|nro\.?\s*|n[°ºo.]\s*(?:de\s+)?)"
 _YEAR = r"a(?:[nñ]|ni)o"
@@ -37,7 +24,8 @@ _LABELS = {
     "numero_chasis": rf"(?:{_NUMBER})?chasis(?:\s*/\s*cuadro)?|vin",
 }
 _LABEL_PATTERN = re.compile(
-    r"(?<!\S)(?:" + "|".join(f"(?P<{key}>{label})" for key, label in _LABELS.items())
+    r"(?<!\S)(?:"
+    + "|".join(f"(?P<{key}>{label})" for key, label in _LABELS.items())
     + r")(?!\w)(?:[^\S\n]*[:=][^\S\n]*|(?=\s|$))",
     re.IGNORECASE,
 )
@@ -78,7 +66,7 @@ def extract_title_fields(id_documento: str, text: str) -> ProposedVehicleFields:
         if field is None or field == "auxiliar":
             continue
         end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
-        value = _clean_value(field, text[match.end():end])
+        value = _clean_value(field, text[match.end() : end])
         if value is not None:
             candidates.setdefault(field, {}).setdefault(str(value).casefold(), value)
     for field, values in candidates.items():
