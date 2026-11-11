@@ -1,6 +1,6 @@
 """src/main.py — Entrypoint principal de la aplicación FastAPI."""
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -16,14 +16,14 @@ from src.infrastructure.settings.logger import logger
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Ciclo de vida de la aplicación: inicialización y cierre ordenado de recursos."""
     logger.info("Iniciando aplicación y verificando configuración...")
     database_url = get_settings().DATABASE_URL
     for prefix in ("sqlite+aiosqlite:///", "sqlite:///"):
         if database_url.startswith(prefix):
-            app.state.vehicle_repository = SQLiteVehicleRepository(database_url[len(prefix):])
-            app.state.document_repository = SQLiteDocumentRepository(database_url[len(prefix):])
+            app.state.vehicle_repository = SQLiteVehicleRepository(database_url[len(prefix) :])
+            app.state.document_repository = SQLiteDocumentRepository(database_url[len(prefix) :])
             app.state.history_repository = app.state.document_repository.history_repository
             break
     else:

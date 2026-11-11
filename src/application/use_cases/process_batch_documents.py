@@ -39,7 +39,7 @@ class ProcessBatchDocumentsUseCase:
     ) -> list[BatchDocumentResult]:
         # Como antes, un archivo a la vez: orden estable y memoria acotada.
         # El trabajo bloqueante se ejecuta fuera del event loop con la biblioteca estandar.
-        results = []
+        results: list[BatchDocumentResult] = []
         for upload in uploads:
             results.append(await asyncio.to_thread(self.process_file, upload))
         return results

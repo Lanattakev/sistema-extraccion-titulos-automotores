@@ -2,10 +2,18 @@
 
 from __future__ import annotations
 
+import shutil
+import sys
 from functools import lru_cache
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def default_tesseract_command() -> str:
+    if sys.platform == "win32":
+        return r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+    return shutil.which("tesseract") or "tesseract"
 
 
 class Settings(BaseSettings):
@@ -35,9 +43,9 @@ class Settings(BaseSettings):
     DATABASE_URL: str = Field(default="sqlite+aiosqlite:///./app.db")
 
     # OCR local
-    TESSERACT_CMD: str = Field(default=r"C:\Program Files\Tesseract-OCR\tesseract.exe")
+    TESSERACT_CMD: str = Field(default_factory=default_tesseract_command)
     TESSERACT_LANG: str = Field(default="spa+eng")
-    TESSERACT_TIMEOUT: float = Field(default=30, gt=0)
+    TESSERACT_TIMEOUT: int = Field(default=30, gt=0)
 
 
 @lru_cache
