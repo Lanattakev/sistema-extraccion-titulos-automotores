@@ -1,38 +1,21 @@
-"""src/infrastructure/image_text_extraction.py — OCR local de imagenes."""
+"""src/infrastructure/image_text_extraction.py - Compatibilidad del OCR existente.
+
+La implementacion se encuentra en extraction/image_ocr.py.
+Se conservan la funcion publica y las referencias usadas por las pruebas existentes.
+"""
 
 from pathlib import Path
 
-import pytesseract
-from PIL import Image
-
-from src.infrastructure.extracted_text import ExtractedText
-from src.infrastructure.persistence.local_document_storage import Document, InvalidDocument
-from src.infrastructure.settings.config import get_settings
+from src.application.dtos.document_dtos import Document, ExtractedText
+from src.infrastructure.extraction.image_ocr import ImageOcrExtractor
+from src.infrastructure.extraction.image_ocr import get_settings as get_settings
+from src.infrastructure.extraction.image_ocr import (
+    pytesseract as pytesseract,
+)
+from src.infrastructure.extraction.image_ocr import (
+    recognize_image_text as recognize_image_text,
+)
 
 
 def extract_image_text(document: Document, path: Path) -> ExtractedText:
-    """Lee una imagen local sin modificarla ni guardar registros de vehiculos."""
-    try:
-        with Image.open(path) as image:
-            if image.format not in {"JPEG", "PNG"}:
-                raise InvalidDocument("Solo se admite OCR de imagenes JPG/JPEG y PNG.")
-            text = recognize_image_text(image)
-    except (OSError, ValueError, RuntimeError, Image.DecompressionBombError) as error:
-        raise InvalidDocument(
-            "No se pudo realizar OCR: imagen ilegible o Tesseract no disponible."
-        ) from error
-    return ExtractedText(
-        document.id_documento, document.nombre_original, text, len(text), not bool(text),
-        "Texto extraido mediante OCR; requiere revision humana."
-        if text else "OCR no obtuvo texto util; se requiere revision humana.",
-    )
-
-
-def recognize_image_text(image: Image.Image) -> str:
-    """OCR compartido por archivos de imagen y paginas PDF renderizadas."""
-    settings = get_settings()
-    pytesseract.pytesseract.tesseract_cmd = settings.TESSERACT_CMD
-    text = pytesseract.image_to_string(
-        image, lang=settings.TESSERACT_LANG, timeout=settings.TESSERACT_TIMEOUT,
-    )
-    return text if any(character.isalnum() for character in text) else ""
+    return ImageOcrExtractor().extract(document, path)

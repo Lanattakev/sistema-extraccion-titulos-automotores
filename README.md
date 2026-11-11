@@ -96,15 +96,17 @@ src/
   domain/vehicle_record.py         # Registros y validaciones
   application/dtos/                # Datos de entrada, carga y resultados
   application/use_cases/           # Carga, extraccion, revision, confirmacion y lotes
+  application/text_extraction.py   # Contrato de estrategias y politica de fallback PDF
   application/title_field_extraction.py
                                    # Propuesta de campos sin I/O
   adapters/                        # Paquete sin adaptadores implementados
   infrastructure/
     fastapi/routers/               # Documentos y vehículos
     persistence/                   # Archivos locales y SQLite
-    pdf_text_extraction.py         # pypdf primero; fallback pypdfium2 + OCR
+    extraction/                    # Motores PDF/OCR y fabrica por MIME
+    pdf_text_extraction.py         # Funciones PDF compatibles con versiones previas
     extracted_text.py              # Resultado compartido de extracción
-    image_text_extraction.py       # OCR local con pytesseract y Pillow
+    image_text_extraction.py       # Funciones OCR compatibles con versiones previas
     settings/                      # Configuración y logging
 tests/
   unit/
@@ -200,9 +202,9 @@ extraccion. Una extraccion fallida no agrega un pendiente a SQLite, como antes.
 La API individual mantiene el registro pendiente despues de una carga correcta.
 La confirmacion y el historial conservan las transacciones SQLite existentes.
 
-`infrastructure/document_processing.py` aloja la seleccion anterior de PDF/JPEG/PNG;
-no cambia los motores ni el fallback OCR. Strategy y Factory corresponden al issue #4.
-Esta etapa tampoco actualiza herramientas (#5) ni completa el SRS (#6).
+La etapa #3 traslado la seleccion de PDF/JPEG/PNG a infraestructura conservando
+los motores y el fallback OCR. La evolucion de estrategias del issue #4 se describe
+a continuacion. Las herramientas (#5) y el SRS (#6) son etapas independientes.
 
 Desde la raiz, las nuevas verificaciones aisladas pueden ejecutarse en PowerShell:
 
@@ -214,3 +216,46 @@ La suite completa y las auditorias se ejecutan con los comandos de la seccion an
 Las pruebas usan documentos sinteticos y OCR simulado; no certifican precision de
 Tesseract con titulos reales. La ejecucion del servidor sigue siendo
 `python -m uvicorn src.main:app --reload --host 127.0.0.1 --port 8000`.
+
+
+## Estrategias de extraccion y fabrica (issue #4)
+
+`application/text_extraction.py` define el protocolo `TextExtractor` y la politica
+`PdfTextExtractor`. El contrato recibe los metadatos `Document` y la ruta local,
+y devuelve el DTO `ExtractedText`; evita cargar todos los bytes del archivo y
+conserva los contratos existentes. Aplicacion no importa lectores PDF, OCR ni FastAPI.
+
+Las estrategias concretas estan en `infrastructure/extraction/`:
+
+- `NativePdfExtractor` lee texto digital con pypdf y rechaza PDF invalidos o cifrados.
+- `ScannedPdfOcrExtractor` renderiza con pypdfium2 y aplica OCR pagina por pagina;
+  libera explicitamente imagen, bitmap, pagina y documento, incluso ante un error.
+- `ImageOcrExtractor` procesa JPEG/PNG con Pillow y el OCR local configurado.
+
+`TextExtractorFactory` registra y resuelve las estrategias por MIME. Su registro
+puede ampliarse o reemplazarse con `register(mime_type, extractor)` o con un mapa
+inyectado, sin agregar condicionales a la seleccion. `document_processing.py`
+conecta la fabrica con los originales almacenados; la capa web no crea motores.
+La API conserva los formatos admitidos y sus validaciones de carga.
+
+La politica PDF intenta texto directo primero: un solo campo valido reconocido
+por el parser basta para omitir OCR. Texto vacio, auxiliar o sin campos validos
+activa el OCR; sus paginas se unen en orden. Se conservan los mensajes, errores,
+campos propuestos, reglas de revision humana y procesamiento por lotes.
+
+Las funciones anteriores `extract_pdf_text`, `extract_scanned_pdf_text`,
+`extract_image_text` y `recognize_image_text` siguen disponibles como puntos de
+compatibilidad. Los motores de imagen y PDF escaneado aceptan una funcion OCR
+inyectada, y el pipeline PDF acepta extractores simulados; las pruebas no requieren
+el ejecutable de Tesseract.
+
+Desde la raiz del proyecto, en PowerShell:
+
+```powershell
+.\.venv\Scripts\python.exe -X utf8 -m pytest -q tests/unit/test_text_extraction_strategies.py tests/test_documents.py
+```
+
+La suite completa y las auditorias siguen usando los comandos anteriores.
+Esta etapa no actualiza dependencias ni herramientas (#5), no agrega formatos,
+servicios externos o nuevos endpoints y no completa el SRS (#6). Las verificaciones
+con documentos sinteticos y OCR simulado no certifican precision sobre titulos reales.
