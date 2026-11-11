@@ -6,9 +6,10 @@ from datetime import datetime
 from pathlib import Path
 
 from src.domain.history_event import HistoryEvent, HistoryEventType
+from src.domain.repositories import HistoryRepository
 
 
-class SQLiteHistoryRepository:
+class SQLiteHistoryRepository(HistoryRepository):
     def __init__(self, db_path: str | Path) -> None:
         self._db_path = str(db_path)
         with closing(sqlite3.connect(self._db_path)) as connection, connection:

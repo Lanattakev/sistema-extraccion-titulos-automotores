@@ -5,10 +5,11 @@ from contextlib import closing
 from datetime import datetime
 from pathlib import Path
 
+from src.domain.repositories import VehicleRepository
 from src.domain.vehicle_record import VehicleIntake, VehicleRecord
 
 
-class SQLiteVehicleRepository:
+class SQLiteVehicleRepository(VehicleRepository):
     """Guarda y recupera ingresos completos en una base SQLite local."""
 
     def __init__(self, db_path: str | Path) -> None:

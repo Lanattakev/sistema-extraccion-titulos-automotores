@@ -142,3 +142,31 @@ curl -X POST http://127.0.0.1:8000/api/v1/documents/batch -F "files=@titulo.pdf"
 
 1. Incorporar una interfaz dedicada de revisión y confirmación sobre el flujo ya disponible en la API.
 2. Definir controles de acceso, retención de documentos y condiciones de despliegue antes de habilitar uso compartido.
+
+## Contratos de repositorios (issue #2)
+
+`src/domain/repositories.py` define `DocumentRepository`, `VehicleRepository` y
+`HistoryRepository` mediante `typing.Protocol`, sin dependencias de FastAPI ni SQLite.
+Los routers consumen estos contratos; `src/main.py` conserva la composicion de las
+implementaciones SQLite. Estas declaran explicitamente sus protocolos y mantienen
+las consultas, migraciones y transacciones existentes.
+
+Los errores `DocumentNotFoundError` y `DocumentConflictError` pertenecen al contrato
+de dominio. Sus imports anteriores desde `sqlite_document_repository` siguen siendo
+validos y conservan la misma identidad. La API mantiene las respuestas HTTP 404/409.
+El contrato de historial solo expone lectura: la escritura con conexion SQLite sigue
+siendo un detalle interno para preservar la atomicidad de documento, ingreso e historial.
+
+Las pruebas `tests/unit/test_repository_contracts.py` ejercitan los routers con
+repositorios en memoria; `tests/integration/test_repository_contracts.py` verifica
+los contratos con SQLite y la compatibilidad de los errores. Desde la raiz, en PowerShell:
+
+```powershell
+.\.venv\Scripts\python.exe -X utf8 -m pytest -q
+.\.venv\Scripts\python.exe -X utf8 tests/test_architecture.py
+.\.venv\Scripts\python.exe -X utf8 tests/test_clean_design.py --strict
+.\.venv\Scripts\python.exe -X utf8 tests/test_god_components.py --strict
+```
+
+Esta etapa no mueve DTOs ni casos de uso (#3), no cambia los motores de extraccion
+(#4), no estabiliza herramientas ni formato global (#5) y no completa el SRS (#6).
