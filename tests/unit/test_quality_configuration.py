@@ -4,11 +4,13 @@ from dataclasses import asdict, fields
 from types import SimpleNamespace
 
 import pytest
+from PIL import Image
 from pydantic import ValidationError
 
 from src.application.document_errors import InvalidDocument
-from src.application.dtos.document_dtos import BatchDocumentResult, ProposedVehicleFields
+from src.application.dtos.document_dtos import BatchDocumentResult, Document, ProposedVehicleFields
 from src.domain.vehicle_record import VehicleIntake, VehicleRecord
+from src.infrastructure.extraction.image_ocr import ImageOcrExtractor
 from src.infrastructure.fastapi.document_http import document_error_status
 from src.infrastructure.settings import config
 
@@ -99,3 +101,28 @@ def test_subclass_of_document_error_keeps_http_mapping():
         pass
 
     assert document_error_status(DetailedInvalidDocument("invalido")) == 400
+
+
+@pytest.mark.parametrize("fails", [False, True])
+def test_image_ocr_closes_file_and_image_on_success_and_error(tmp_path, fails):
+    path = tmp_path / "synthetic.png"
+    with Image.new("RGB", (20, 20), "white") as image:
+        image.save(path, format="PNG")
+    captured = []
+
+    def recognize(image):
+        captured.append(image)
+        if fails:
+            raise RuntimeError("OCR timeout")
+        return "Dominio: AB123CD"
+
+    document = Document("doc", "synthetic.png", "synthetic.png", "image/png", path.stat().st_size)
+    extractor = ImageOcrExtractor(recognize)
+    if fails:
+        with pytest.raises(InvalidDocument, match="No se pudo realizar OCR"):
+            extractor.extract(document, path)
+    else:
+        assert extractor.extract(document, path).texto_extraido == "Dominio: AB123CD"
+    assert len(captured) == 1
+    with pytest.raises(ValueError):
+        captured[0].getpixel((0, 0))

@@ -1,6 +1,7 @@
 """src/infrastructure/extraction/image_ocr.py - OCR local de imagenes."""
 
 from collections.abc import Callable
+from contextlib import closing
 from pathlib import Path
 
 import pytesseract
@@ -30,7 +31,7 @@ class ImageOcrExtractor(TextExtractor):
 
     def extract(self, document: Document, path: Path) -> ExtractedText:
         try:
-            with Image.open(path) as image:
+            with closing(Image.open(path)) as image:
                 if image.format not in {"JPEG", "PNG"}:
                     raise InvalidDocument("Solo se admite OCR de imagenes JPG/JPEG y PNG.")
                 text = self.recognize(image)

@@ -75,8 +75,14 @@ def test_real_lifecycle_events_are_persistent_and_newest_first(client):
             "fecha_evento",
             "nombre_original",
         }
-        assert started <= datetime.fromisoformat(event["fecha_evento"]) <= finished
-    dates = [datetime.fromisoformat(event["fecha_evento"]) for event in history]
+        assert (
+            started
+            <= datetime.fromisoformat(event["fecha_evento"].replace("Z", "+00:00"))
+            <= finished
+        )
+    dates = [
+        datetime.fromisoformat(event["fecha_evento"].replace("Z", "+00:00")) for event in history
+    ]
     assert dates == sorted(dates, reverse=True)
     with TestClient(create_app()) as reopened:
         assert reopened.get("/api/v1/history").json() == history
