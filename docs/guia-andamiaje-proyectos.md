@@ -1,6 +1,6 @@
 # Guía de Andamiaje Pedagógico y Metacognición para la Formulación de Proyectos de Software
 
-> *"El andamiaje no consiste en simplificar la tarea, sino en hacer que el aprendiz sea capaz de dominar una tarea que de otro modo estaría más allá de su capacidad actual."*  
+> *"El andamiaje no consiste en simplificar la tarea, sino en hacer que el aprendiz sea capaz de dominar una tarea que de otro modo estaría más allá de su capacidad actual."*
 > — **Jerome Bruner**, *The Role of Tutoring in Problem Solving*
 
 ---
@@ -48,13 +48,13 @@ Comprender la diferencia entre una *idea simpática* y una *solución de valor c
 - **Confundir características con valor:** Describir *qué botones tiene el sistema* en lugar de *qué fricción elimina*.
 
 ### ❓ Batería de Preguntas Mayéuticas (Disparadores de Pensamiento)
-1. **La Prueba Analógica:** Si prohibiéramos terminantemente usar computadoras, celulares y software para este problema:  
+1. **La Prueba Analógica:** Si prohibiéramos terminantemente usar computadoras, celulares y software para este problema:
    *¿Cómo lo resuelve la gente hoy usando papel, llamadas telefónicas, cuadernos o planillas de cálculo?*
-2. **El Dolor Cuantificable:**  
+2. **El Dolor Cuantificable:**
    *¿Qué pierde hoy el usuario con su método actual? ¿Pierde 3 horas diarias, dinero en multas, tranquilidad legal, clientes que se van enojados? ¿Podés expresarlo en números?*
-3. **El Costo del Statu Quo:**  
+3. **El Costo del Statu Quo:**
    *Si este software nunca se construyera y todo siguiera exactamente como hoy durante los próximos 5 años, ¿qué pasaría realmente? Si la respuesta es "nada grave", el proyecto no tiene urgencia estratégica.*
-4. **Empatía Situacional:**  
+4. **Empatía Situacional:**
    *Pensá en la persona concreta que usará el sistema un martes a las 17:50 hs tras un día agotador. ¿Tu software le hace el trabajo más fácil en un clic, o le agrega burocracia de carga de datos que odiará completar?*
 
 ### 📊 Rúbrica Metacognitiva de Autoevaluación
@@ -76,13 +76,13 @@ Desarrollar pensamiento sistémico. Ningún software opera en el vacío: vive de
 - **Ignorar al que paga:** Diseñar un sistema que le encanta al usuario operativo pero que no le genera ningún retorno tangible a quien firma el cheque.
 
 ### ❓ Batería de Preguntas Mayéuticas (Disparadores de Pensamiento)
-1. **Doble Actor (Usuario vs. Comprador):**  
+1. **Doble Actor (Usuario vs. Comprador):**
    *¿La persona que utiliza la pantalla día a día es la misma que decide pagar por el desarrollo o la licencia? Si son personas distintas: ¿qué gana cada una?*
-2. **La Responsabilidad de la Decisión del Agente:**  
+2. **La Responsabilidad de la Decisión del Agente:**
    *Cuando asignás una tarea a un agente de IA en el organigrama: ¿el agente solo ejecuta trabajo mecánico (clasificar, extraer datos) o toma decisiones con impacto legal o económico? Si el agente alucina o comete un error grave, ¿quién da la cara ante el cliente o la justicia?*
-3. **El Bucle de Retroalimentación Humana (*Human-in-the-Loop*):**  
+3. **El Bucle de Retroalimentación Humana (*Human-in-the-Loop*):**
    *¿En qué punto exacto un humano con criterio revisa o aprueba las acciones de la IA antes de que afecten la base de datos de producción o envíen un mensaje real a un cliente?*
-4. **Sostenibilidad Económica:**  
+4. **Sostenibilidad Económica:**
    *Si el sistema procesa 100.000 operaciones al mes con llamadas a modelos LLM y servicios cloud: ¿cuánto cuesta la infraestructura por transacción y cuánto cobrás o ahorrás por ella? ¿El margen es positivo?*
 
 ### 📊 Rúbrica Metacognitiva de Autoevaluación
@@ -104,13 +104,13 @@ Aprender a traducir intenciones ambiguas en especificaciones formales, comprobab
 - **Requisitos no testeables:** Redactar algo de modo tal que sea imposible escribir un test automatizado para verificar si se cumple o no.
 
 ### ❓ Batería de Preguntas Mayéuticas (Disparadores de Pensamiento)
-1. **La Pregunta del Notario / Juez:**  
+1. **La Pregunta del Notario / Juez:**
    *Si le das tu requisito a dos desarrolladores independientes en habitaciones separadas: ¿construirían exactamente el mismo flujo, o tendrían que venir a preguntarte qué quisiste decir?*
-2. **Definición Operativa de "Rápido":**  
+2. **Definición Operativa de "Rápido":**
    *En vez de decir "será rápido": ¿cuántos milisegundos como máximo puede tardar el percentil 95 (p95) de las solicitudes en el momento de mayor carga del día? ¿100 ms? ¿500 ms? ¿2 segundos?*
-3. **El Escenario Catastrófico de Concurrencia:**  
+3. **El Escenario Catastrófico de Concurrencia:**
    *¿Qué ocurre si dos usuarios o procesos intentan modificar el mismo recurso (comprar la última entrada, cambiar el mismo estado, retirar el mismo saldo) exactamente en el mismo milisegundo? ¿Tu especificación exige transacciones atómicas, bloqueos o idempotencia?*
-4. **Desconexión y Fallo Parcial:**  
+4. **Desconexión y Fallo Parcial:**
    *Si a mitad de una operación de guardado se corta la conexión a internet o el servicio externo de pagos se cae: ¿en qué estado queda la base de datos? ¿Quedan datos huérfanos o inconsistentes?*
 
 ### 📊 Rúbrica Metacognitiva de Autoevaluación
@@ -132,13 +132,13 @@ Adquirir criterio arquitectónico: entender que toda decisión técnica es un **
 - **Cero consideración del ciclo de vida:** Pensar solo en el momento de creación del código y olvidar el mantenimiento, la depuración y los logs en producción.
 
 ### ❓ Batería de Preguntas Mayéuticas (Disparadores de Pensamiento)
-1. **La Justificación de la Indirección:**  
+1. **La Justificación de la Indirección:**
    *¿Por qué separar Domain, Application e Infrastructure en vez de poner la consulta a la base de datos directamente en el router de FastAPI? ¿Qué ganas con esa separación y cuánto te cuesta en esfuerzo?*
-2. **La Regla de la Dependencia:**  
+2. **La Regla de la Dependencia:**
    *Si mañana decidís cambiar la base de datos de PostgreSQL a SQLite para tests, o migrar de FastAPI a otro framework: ¿cuántas líneas de tu lógica de negocio tendrías que reescribir? (Si la respuesta es más de cero, tu dominio está acoplado a la infraestructura).*
-3. **El Principio YAGNI (*You Aren't Gonna Need It*):**  
+3. **El Principio YAGNI (*You Aren't Gonna Need It*):**
    *¿Esa interfaz genérica o clase base que creaste tiene más de una implementación real hoy? Si solo tiene una y no la vas a cambiar en los próximos 6 meses, ¿no es una sobreingeniería que solo agrega saltos cognitivos?*
-4. **Imports Absolutos y Trazabilidad:**  
+4. **Imports Absolutos y Trazabilidad:**
    *¿Por qué el Guantelete de Restricciones prohíbe los imports relativos (`../`) y exige `@/` o `from src...`? ¿Cómo ayuda eso a un agente IA o a un colega a entender dónde está parado cada módulo sin adivinar la jerarquía relativa?*
 
 ### 📊 Rúbrica Metacognitiva de Autoevaluación
@@ -160,13 +160,13 @@ Internalizar la filosofía de la **verificabilidad determinista**. No confiamos 
 - **Delegación ciega al agente:** Aceptar una solución generada por LLM simplemente porque no arrojó error de sintaxis en el editor.
 
 ### ❓ Batería de Preguntas Mayéuticas (Disparadores de Pensamiento)
-1. **El Paradigma de Uncle Bob:**  
+1. **El Paradigma de Uncle Bob:**
    *Si un agente IA autónomo escribe 3.000 líneas de código y te dice que terminó: ¿cómo demostrás matemáticamente que no introdujo vulnerabilidades, código muerto o efectos secundarios sin tener que leer manualmente cada línea?*
-2. **La Prueba del Adversario:**  
+2. **La Prueba del Adversario:**
    *Si contrataras a un hacker o tester malicioso cuyo único objetivo es hacer crashear tu sistema con datos absurdos (textos de 1 millón de caracteres, números negativos donde van cantidades, caracteres chinos o inyecciones SQL): ¿tu código falla controladamente con un error 400 claro o explota con un 500 no capturado?*
-3. **La Prueba del Bisect:**  
+3. **La Prueba del Bisect:**
    *Si dentro de 3 meses descubrís un bug silencioso en producción: ¿podrías encontrar el commit exacto que lo introdujo en menos de 5 minutos gracias a commits atómicos e independientes, o tendrías que revisar un mega-commit de 50 archivos mezclados?*
-4. **La Regla del "Y Además":**  
+4. **La Regla del "Y Además":**
    *Mirá el mensaje de tu último commit: ¿contiene la palabra "y", "además" o "también"? Si es así, no hiciste un commit atómico; mezclaste dos intenciones lógicas distintas.*
 
 ### 📊 Rúbrica Metacognitiva de Autoevaluación
