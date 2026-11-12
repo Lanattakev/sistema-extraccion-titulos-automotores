@@ -53,6 +53,11 @@ case "$COMMAND" in
         echo "🛡️  Ejecutando Guantelete de Restricciones Arquitectónicas..."
         exec "$PYTHON_BIN" tests/test_architecture.py
         ;;
+    frontend-test)
+        echo "🧪 Ejecutando las pruebas del frontend..."
+        cd "$SCRIPT_DIR/frontend"
+        exec npm test -- "${@:2}"
+        ;;
     audit)
         ensure_venv
         echo "🧹 Ejecutando auditorías determinísticas (Clean Design & God Components)..."
@@ -88,6 +93,7 @@ case "$COMMAND" in
         echo "  dev       : Levanta el servidor FastAPI con reload automático en puerto 8000"
         echo "  start     : Levanta el servidor FastAPI en modo producción"
         echo "  test      : Ejecuta la suite de pruebas unitarias y de arquitectura con pytest"
+        echo "  frontend-test : Ejecuta npm test en frontend (requiere npm ci previo)"
         echo "  gauntlet  : Ejecuta las 11 reglas del Guantelete de Restricciones (test_architecture.py)"
         echo "  audit     : Ejecuta auditorías de código muerto y componentes Dios"
         echo "  lint      : Comprueba errores de estilo y formato con ruff"

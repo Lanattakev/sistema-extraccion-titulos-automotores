@@ -1,13 +1,13 @@
-# SRS-SPECS: {nombre_del_sistema_o_proyecto} — Single Source of Truth (SSOT) & Especificación del Sistema
+# SRS-SPECS: Sistema de extracción de títulos automotores — Single Source of Truth (SSOT) & Especificación del Sistema
 
 > **Documento:** `srs-spec-backend-fastapi.md`
-> **Versión:** `{version_documento_ej_1_0_0}`
-> **Estado:** `{borrador_en_revision_aprobado}`
-> **Fecha:** `{fecha_actual_o_release}`
-> **Autor(es):** `{autor_o_equipo_responsable}`
-> **Repositorio / Módulo:** `{organizacion_o_usuario}/{nombre_del_repositorio}`
+> **Versión:** `2.0.0`
+> **Estado:** `En revisión mediante el PR del issue #6`
+> **Fecha:** `2026-11-12`
+> **Autor(es):** `Kevin Lanatta; desarrollo asistido bajo revisión humana`
+> **Repositorio / Módulo:** `Lanattakev/sistema-extraccion-titulos-automotores`
 
-> 💡 **Acompañamiento Pedagógico:** Antes de completar esta plantilla, se recomienda consultar la [Guía de Andamiaje Pedagógico y Metacognición](../docs/guia-andamiaje-proyectos.md) para reflexionar sobre los problemas de negocio, casos de borde y evitar la sobreingeniería.
+> **Acompañamiento pedagógico:** Consultar la [Guía de Andamiaje Pedagógico y Metacognición](guia-andamiaje-proyectos.md) para revisar problemas de negocio, casos de borde y restricciones.
 
 ---
 
@@ -16,16 +16,16 @@
 ### 1.1. Foco Estratégico & Alcance
 * **Mercado Objetivo:** Procesos de gestión documental automotor que requieren transcribir, revisar y registrar datos de títulos de vehículos. El MVP se orienta a evaluar esa necesidad en un entorno local; el segmento comercial y la demanda aún no están validados.
 * **Buyer Persona (Decisor / Cliente Ideal):** Como hipótesis por validar, responsable de un proceso de gestión documental automotor que evalúa herramientas para asistir la carga y revisión de datos. Se distingue del operador que usa la API; no hay compradores ni contratos documentados.
-* **User Persona (Operador / Usuario Final):** Operador que carga un título, revisa/corrige los seis campos propuestos y confirma su guardado mediante la API o Swagger, sin frontend dedicado.
+* **User Persona (Operador / Usuario Final):** Operador que carga un título, revisa/corrige los seis campos propuestos y confirma su guardado mediante la SPA React 19, la API o Swagger.
 * **Alcance Geográfico & Modalidad:** MVP local con archivos en disco y SQLite. La extracción reconoce formatos de patentes argentinas; no se declara cobertura internacional ni despliegue cloud.
 
-* **Fuera de Alcance (*Out of Scope*):** Aprobación automática, interfaz dedicada de revisión, autenticación, roles e integración con registros oficiales. El OCR local de JPG/JPEG/PNG y el fallback OCR para PDF escaneado ya están implementados.
+* **Fuera de Alcance (*Out of Scope*):** Aprobación automática, autenticación, roles e integración con registros oficiales. La SPA de revisión y confirmación ya está implementada. El OCR local de JPG/JPEG/PNG y el fallback OCR para PDF escaneado ya están implementados.
 
 ### 1.2. Pilares de Valor de la Solución
 | Pilar | Enfoque | Implementación en este Sistema |
 | :--- | :--- | :--- |
 | **1. Activos & Entorno Operativo** | Infraestructura física, dispositivos, hardware o fuentes de datos base. | Carga de PDF, JPG/JPEG y PNG de hasta 10 MiB por archivo, con UUID interno y metadatos JSON en disco local. Las imágenes JPG/JPEG/PNG se almacenan y pueden procesarse con OCR local mediante Tesseract, pytesseract y Pillow. |
-| **2. Software & Lógica de Negocio** | Captura, procesamiento en tiempo real, persistencia y APIs. | FastAPI y Swagger; extracción de PDF con pypdf primero. Si el parser no reconoce ningún campo válido en el texto directo, pypdfium2 renderiza las páginas y se aplica Tesseract. Un solo campo válido basta para usar el texto directo sin OCR. El OCR local de JPG/JPEG/PNG utiliza Tesseract, pytesseract y Pillow. Todos los flujos reutilizan el parser existente para proponer patente, marca, modelo, motor, chasis y año. Campos ausentes, inválidos o contradictorios quedan en null; las propuestas de extract-fields mantienen requiere_revision = true. Confirmación humana mediante POST /api/v1/documents/{id_documento}/confirm y consulta de datos completos en SQLite, separadas de la extracción. El ingreso confirmado se persiste con requiere_revision = false. La propuesta no guarda automáticamente VehicleRecord. Si el OCR no obtiene texto útil, devuelve texto vacío y campos null mediante una respuesta controlada. |
+| **2. Software & Lógica de Negocio** | Captura, procesamiento en tiempo real, persistencia y APIs. | FastAPI y Swagger; extracción de PDF con pypdf primero. Si el parser no reconoce ningún campo válido en el texto directo, pypdfium2 renderiza las páginas y se aplica Tesseract. Un solo campo válido basta para usar el texto directo sin OCR. El OCR local de JPG/JPEG/PNG utiliza Tesseract, pytesseract y Pillow. Todos los flujos reutilizan el parser existente para proponer patente, marca, modelo, motor, chasis y año. Campos ausentes, inválidos o contradictorios quedan en null; las propuestas de extract-fields mantienen requiere_revision = true. Confirmación humana mediante POST /api/v1/documents/ID_DOCUMENTO/confirm y consulta de datos completos en SQLite, separadas de la extracción. El ingreso confirmado se persiste con requiere_revision = false. La propuesta no guarda automáticamente VehicleRecord. Si el OCR no obtiene texto útil, devuelve texto vacío y campos null mediante una respuesta controlada. |
 | **3. Impacto Económico & ROI** | Optimización de costos, generación de ingresos o eficiencia operativa. | Se busca reducir transcripción manual y facilitar la revisión humana. No hay mediciones documentadas de ahorro, precisión, tiempos ni retorno económico. |
 
 ### 1.3. Coordinación Operativa, Roles & Seguridad
@@ -41,326 +41,193 @@
 | Bloque Canvas | Definición Estratégica | Componentes Clave en el Software |
 | :--- | :--- | :--- |
 | **1. Socios Clave (KP)** | Sin alianzas ni proveedores comerciales definidos. | Dependencias de software declaradas; sin integración con registros oficiales ni servicios externos de OCR. |
-| **2. Actividades Clave (KA)** | Carga, extracción conservadora, revisión humana y registro. | extract-fields propone los seis campos con requiere_revision = true sin persistir; POST /api/v1/documents/{id_documento}/confirm recibe los campos revisados/corregidos y guarda VehicleIntake en SQLite con requiere_revision = false. |
+| **2. Actividades Clave (KA)** | Carga, extracción conservadora, revisión humana y registro. | extract-fields propone los seis campos con requiere_revision = true sin persistir; POST /api/v1/documents/ID_DOCUMENTO/confirm recibe los campos revisados/corregidos y guarda VehicleIntake en SQLite con requiere_revision = false. |
 | **3. Recursos Clave (KR)** | Código, reglas de extracción, pruebas y almacenamiento local. | Python, FastAPI, pypdf, pypdfium2, Tesseract, pytesseract, Pillow, modelos de dominio, archivos con UUID y SQLite. |
 | **4. Propuesta de Valor (VP)** | Facilitar el registro sin completar automáticamente valores dudosos. | Seis campos propuestos; null cuando no hay un candidato válido único y requiere_revision = true. |
 | **5. Relación con Clientes (CR)** | Evaluación técnica del MVP; soporte comercial por definir. | Swagger para probar la API; sin notificaciones, webhooks ni sistema de soporte. |
-| **6. Canales de Distribución (CH)** | API HTTP local. | /api/v1/documents, /api/v1/vehicles y Swagger en /api/v1/docs con configuración predeterminada. Sin frontend dedicado. |
+| **6. Canales de Distribución (CH)** | API HTTP local. | /api/v1/documents, /api/v1/vehicles y Swagger en /api/v1/docs con configuración predeterminada. SPA React 19 con TypeScript y Vite para carga, revisión, confirmación, vehículos, historial y métricas. |
 | **7. Segmentos de Clientes (CS)** | Operadores que transcriben títulos automotores; segmentación comercial pendiente. | Validaciones comunes, sin usuarios ni permisos por roles. |
 | **8. Estructura de Costos (CS)** | Ejecución local, disco y mantenimiento; costos sin cuantificar. | SQLite y archivos locales, sin infraestructura cloud ni medición de consumo facturable integrada. |
 | **9. Fuentes de Ingresos (RS)** | Modelo de ingresos y precios no definidos. | Sin pagos, suscripciones ni facturación. |
 
 ### 2.2. Organigrama Operativo / Gobernanza de Agentes IA (Opcional)
 * **Coordinación técnica:** La gobernanza corresponde al equipo humano. Codex se usa como herramienta de desarrollo asistido bajo supervisión humana; sus propuestas están sujetas a revisión, aprobación de cambios y validación de resultados por el equipo. No hay organigrama formal ni agentes IA operativos implementados en el MVP. Las responsabilidades del código se describen a continuación.
-* **Dominio y aplicación:** src/domain define registros y validaciones; src/application propone campos a partir de texto sin I/O.
+* **Dominio y aplicación:** src/domain define registros y validaciones; src/application contiene DTOs, parser de campos, política PDF y casos de uso de carga, extracción, revisión, confirmación y lote; coordina dependencias inyectadas sin importar FastAPI ni SQLite.
 * **API e infraestructura:** src/infrastructure contiene routers FastAPI, extracción de PDF con pypdf y fallback con pypdfium2, OCR compartido de imágenes y páginas PDF separado de FastAPI, almacenamiento local, repositorio SQLite y configuración.
 * **Calidad:** pytest ejecuta las pruebas unitarias, de integración y de endpoints; Ruff controla las reglas de lint y formato, y los tests arquitectónicos verifican las restricciones de arquitectura. Estas herramientas controlan la calidad y complementan la revisión humana. Sus resultados deben verificarse al ejecutarlas; no equivalen a certificación ni sustituyen la aprobación del equipo.
 * **Trazabilidad y colaboración:** Git/GitHub y los commits se usan para la trazabilidad, la colaboración y el registro de la evolución del proyecto.
 * **OCR implementado y validación:** OCR local de JPG/JPEG/PNG con Tesseract, pytesseract y Pillow, y fallback OCR para PDF escaneado con pypdfium2 y Tesseract, integrados en extract-text y extract-fields. En PDF se intenta pypdf primero; el parser existente determina si el texto directo aporta al menos un campo válido. Si no aporta ninguno, se renderizan las páginas, se aplica el OCR existente y se une el texto en orden. Reutiliza el parser existente de los seis campos, mantiene requiere_revision = true y no guarda automáticamente VehicleRecord. Las pruebas con OCR simulado cubren imágenes con y sin texto, fallback de PDF, texto auxiliar irrelevante sobre páginas escaneadas, orden de páginas, extracción de campos y errores; también verifican que PDF con texto útil no use OCR; no acreditan precisión sobre documentos reales. La ruta del ejecutable, los idiomas y el tiempo límite se centralizan en Settings.
-* **Confirmación humana implementada:** POST /api/v1/documents/{id_documento}/confirm recibe patente, marca, modelo, numero_motor, numero_chasis y anio revisados/corregidos por el usuario. Valida mediante VehicleRecord, obtiene el nombre original del documento como archivo_origen y persiste VehicleIntake en SQLite con requiere_revision = false; devuelve el registro creado con HTTP 201. Las correcciones humanas prevalecen sobre OCR, sin volver a ejecutar la extracción. Documento inexistente devuelve HTTP 404; datos inválidos, HTTP 422. extract-fields sigue proponiendo los seis campos con requiere_revision = true sin guardar automáticamente. El alta independiente por /vehicles conserva requiere_revision = true y recibe archivo_origen del usuario.
-* **Trabajo pendiente:** Interfaz dedicada de revisión y confirmación y controles de acceso; el flujo humano actual se realiza mediante la API o Swagger.
+* **Confirmación humana implementada:** POST /api/v1/documents/ID_DOCUMENTO/confirm recibe patente, marca, modelo, numero_motor, numero_chasis y anio revisados/corregidos por el usuario. Valida mediante VehicleRecord, obtiene el nombre original del documento como archivo_origen y persiste VehicleIntake en SQLite con requiere_revision = false; devuelve el registro creado con HTTP 201. Las correcciones humanas prevalecen sobre OCR, sin volver a ejecutar la extracción. Documento inexistente devuelve HTTP 404; datos inválidos, HTTP 422. extract-fields sigue proponiendo los seis campos con requiere_revision = true sin guardar automáticamente. El alta independiente por /vehicles conserva requiere_revision = true y recibe archivo_origen del usuario.
+* **Trabajo pendiente:** Controles de acceso, hash documental, deduplicación, retención y mediciones de rendimiento. La SPA ya permite revisión y confirmación individual o múltiple.
 
 ### 2.3. Escalera de Valor / Modelo de Conversión
 * **Nivel de Entrada (*Lead Magnet* / Tier Gratuito):** Evaluación local por Swagger con documentos sintéticos; sin demo pública ni plan gratuito comercial definido.
-* **Servicio Core (*Core Offering*):** Implementados: carga local, extracción de texto de PDF con pypdf primero y fallback con pypdfium2 y Tesseract cuando el parser no encuentra campos válidos, OCR local de JPG/JPEG/PNG con Tesseract, pytesseract y Pillow, y propuesta conservadora de los seis campos mediante el parser existente y alta/consulta de registros completos en SQLite. La propuesta de extract-fields mantiene requiere_revision = true, no guarda automáticamente VehicleRecord y requiere revisión humana. La confirmación por POST /api/v1/documents/{id_documento}/confirm persiste los seis campos revisados/corregidos en un VehicleIntake con requiere_revision = false y usa el nombre original del documento como archivo_origen.
-* **Nivel Avanzado (*Enterprise* / Retención):** Sin oferta empresarial ni SLA definidos. El OCR local de JPG/JPEG/PNG y el fallback para PDF escaneado están implementados y probados con OCR simulado. Como evolución futura se contempla procesamiento masivo de documentos, una interfaz dedicada de revisión y confirmación, controles de acceso, trazabilidad y analítica de resultados.
+* **Servicio Core (*Core Offering*):** Implementados: carga local, extracción de texto de PDF con pypdf primero y fallback con pypdfium2 y Tesseract cuando el parser no encuentra campos válidos, OCR local de JPG/JPEG/PNG con Tesseract, pytesseract y Pillow, y propuesta conservadora de los seis campos mediante el parser existente y alta/consulta de registros completos en SQLite. La propuesta de extract-fields mantiene requiere_revision = true, no guarda automáticamente VehicleRecord y requiere revisión humana. La confirmación por POST /api/v1/documents/ID_DOCUMENTO/confirm persiste los seis campos revisados/corregidos en un VehicleIntake con requiere_revision = false y usa el nombre original del documento como archivo_origen.
+* **Nivel Avanzado (*Enterprise* / Retención):** Sin oferta empresarial ni SLA definidos. El OCR local de JPG/JPEG/PNG y el fallback para PDF escaneado están implementados y probados con OCR simulado. Ya existen lote, revisión/confirmación en la SPA, historial y métricas. Como evolución futura se contemplan paralelismo interno del lote, controles de acceso y validación de rendimiento y precisión.
 
 ---
 
 ## 3. Especificación de Requisitos de Software (SRS)
 
-### 3.1. Requisitos Funcionales (FR)
-* **FR-01 - Ingesta y Validación de Datos:** El sistema debe procesar eventos/solicitudes de `{fuente_de_entrada}` validando estrictamente los schemas mediante Pydantic v2.
-* **FR-02 - Persistencia Transaccional:** El sistema debe almacenar las transacciones en `{motor_bd_ej_PostgreSQL_MySQL_SQLite}` mediante el patrón Repository tipado.
-* **FR-03 - Emisión de Eventos y Notificaciones:** El sistema debe emitir alertas/eventos asíncronos vía `{canales_ej_Webhooks_SMTP_MessageBroker}` cuando `{condicion_disparadora}`.
-* **FR-04 - Control de Acceso y Autorización:** El sistema debe restringir el acceso a los recursos mediante `{modelo_seguridad_ej_JWT_OAuth2_API_Keys}` y permisos basados en roles (`{roles_del_sistema}`).
-* **FR-05 - Seguridad y Anti-Abuso:** El sistema debe implementar rate limiting, sanitización estricta de entradas y mitigación de vulnerabilidades OWASP (SQLi, XSS, SSRF).
-* **FR-06 - `{nombre_requisito_especifico_1}`:** El sistema debe `{descripcion_de_accion_y_resultado_esperado}`.
-* **FR-07 - `{nombre_requisito_especifico_2}`:** El sistema debe `{descripcion_de_accion_y_resultado_esperado}`.
+Este documento describe el MVP implementado y separa explícitamente los objetivos pendientes. Las decisiones comerciales no validadas de las secciones 1 y 2 son hipótesis. La API y las pruebas son la evidencia del comportamiento; este documento no acredita precisión OCR, rendimiento ni preparación para producción. En las rutas, ID_DOCUMENTO e ID_VEHICULO representan el UUID correspondiente, no texto literal.
 
-### 3.2. Requisitos No Funcionales (NFR)
-* **NFR-01 - Latencia y Rendimiento:** La latencia p95 en lecturas debe ser inferior a `{latencia_maxima_ms}` ms bajo condiciones normales de operación.
-* **NFR-02 - Concurrencia & Throughput:** Capacidad para procesar `{rps_o_mensajes_por_segundo}` `{solicitudes_o_mensajes_por_segundo}` concurrentes sin degradación.
-* **NFR-03 - Disponibilidad & Resiliencia:** SLA objetivo del `{sla_porcentaje_ej_99_9}`% con reconexión automática y degradación elegante ante caídas de dependencias externas.
-* **NFR-04 - Seguridad y Cifrado:** Cifrado en tránsito (TLS 1.3) y en reposo para datos sensibles; gestión de secretos aislada vía variables de entorno (`.env` protegido por `.gitignore`).
-* **NFR-05 - Conformidad Arquitectónica:** 100% de cumplimiento en pruebas automáticas del Guantelete AST (`tests/test_architecture.py`) en cada commit o PR.
+### 3.1. Requisitos funcionales y evidencia
 
----
+#### RF-01 — Carga y hash documental
 
-## 4. Stack Tecnológico, Arquitectura Limpia & Convenciones (CONVENTIONS)
+**Implementado:** POST `/api/v1/documents` acepta exactamente un archivo en `file`, PDF/JPG/JPEG/PNG de hasta 10 MiB inclusive. Rechaza nombre vacío, rutas en el nombre, extensión no admitida, contenido vacío y exceso de tamaño. Almacena los bytes con UUID y extensión, metadatos JSON y registro SQLite pendiente. La extensión determina MIME; no certifica el contenido. La copia se hace en bloques de 64 KiB, con creación exclusiva y limpieza de archivos parciales ante fallos de almacenamiento. Disco y SQLite no forman una única transacción distribuida.
 
-### 4.1. Stack Tecnológico Base
-* **Lenguaje:** Python 3.10+ (Tipado estricto con `typing`, `Annotated`, `dataclasses`).
-* **Arquitectura:** Clean Architecture Canónica (4 Círculos de Uncle Bob) + Screaming DDD.
-* **Framework Web:** FastAPI (asíncrono, OpenAPI autodocumentado).
-* **Validación & Schemas:** Pydantic v2 (`BaseModel`, `Field`, `ConfigDict`).
-* **Configuración Centralizada:** `pydantic-settings` (`BaseSettings`, `SettingsConfigDict`).
-* **ORM & Persistencia:** `{reemplazar_orm_ej_SQLAlchemy_2_0_SQLModel}` con soporte asíncrono.
-* **Broker & Mensajería (Opcional):** `{reemplazar_broker_ej_MQTT_Kafka_RabbitMQ_Redis}` con `{driver_broker_ej_aiokafka_paho_redis_asyncio}`.
-* **Testing:** Pytest (`pytest-asyncio`, `httpx`).
-* **Linters & Tipado:** Ruff y Pyright (modo estricto).
+**Hash pendiente:** el código no calcula ni persiste SHA-256, ni deduplica contenido. UUID identifica una carga; no demuestra integridad ni igualdad de archivos. El objetivo futuro es calcular SHA-256 de los bytes originales y persistirlo en los metadatos antes de definir una política de duplicados. Su aceptación requerirá comprobar igualdad de hash para bytes idénticos, diferencia al modificar contenido y conservación del hash tras reinicio. Este PR documental no implementa ese objetivo.
 
-### 4.2. Estructura Canónica de Directorios (Screaming DDD + Clean Architecture)
+**Verificación actual:** `tests/test_documents.py`, `tests/unit/test_document_use_cases.py` y `tests/unit/test_document_http_contracts.py` cubren carga, límites, nombres inválidos y contratos HTTP. Campos multipart incorrectos devuelven 422; tamaño excedido, 413; extensión no admitida en carga, archivo vacío o nombre inválido, 400. MIME sin estrategia durante extracción devuelve 415.
 
+#### RF-02 — Extracción híbrida y propuesta conservadora
+
+POST `/api/v1/documents/ID_DOCUMENTO/extract-text` y `/extract-fields` trabajan sobre los originales guardados. PDF usa pypdf primero: un solo campo válido reconocido por el parser basta para omitir OCR. Sin campos válidos, incluso con texto auxiliar, pypdfium2 renderiza cada página y Tesseract realiza OCR en orden. JPG/JPEG/PNG usan Pillow y Tesseract. Las estrategias concretas se resuelven por MIME mediante `TextExtractorFactory`; el protocolo y la política PDF pertenecen a aplicación.
+
+Se proponen patente, marca, modelo, número de motor, número de chasis y año. Ausencia, invalidez o candidatos contradictorios producen null. Las propuestas llevan `requiere_revision=true`; extraer no crea un ingreso vehicular. Una propuesta exitosa se guarda como documento pendiente sin pisar revisiones humanas. OCR sin texto útil devuelve texto vacío/campos nulos; PDF inválido/cifrado, imagen ilegible o fallo OCR producen un error controlado. Un documento inexistente devuelve 404.
+
+**Verificación:** `tests/unit/test_text_extraction_strategies.py`, `tests/unit/test_title_field_extraction.py` y `tests/test_documents.py`. OCR está simulado: no hay corpus real ni porcentaje de exactitud acreditado.
+
+#### RF-03 — Revisión y confirmación humana
+
+GET `/api/v1/documents` recupera estados persistidos. PATCH `/api/v1/documents/ID_DOCUMENTO/review` valida los seis campos completos y guarda estado revisado. Repetir una revisión idéntica no duplica el evento; editar campos requiere volver a guardar. POST `/api/v1/documents/ID_DOCUMENTO/confirm` crea un `VehicleIntake` con HTTP 201, UUID interno, número de registro positivo, fecha de ingreso, nombre original como `archivo_origen` y `requiere_revision=false`. El nombre de origen lo obtiene el servidor; no se admite como corrección del usuario. La confirmación no ejecuta OCR de nuevo.
+
+La transacción SQLite engloba ingreso, cambio a registrado y evento de historial. Documento registrado devuelve 409 ante nueva revisión/confirmación; si los campos enviados difieren de una revisión guardada, confirmar devuelve 409. Inexistente devuelve 404 y datos inválidos, 422. Por compatibilidad, la API acepta confirmar un pendiente enviando explícitamente sus seis campos completos; la SPA exige guardar revisión y su confirmación múltiple omite pendientes, continúa tras fallos y no reenvía éxitos.
+
+POST `/api/v1/vehicles` conserva el alta independiente: recibe los seis campos y `archivo_origen`, sin verificar una carga, y crea un ingreso con `requiere_revision=true`. GET `/api/v1/vehicles` y `/api/v1/vehicles/ID_VEHICULO` consultan ingresos.
+
+**Verificación:** `tests/e2e/test_document_workflow.py`, `tests/e2e/test_vehicles.py`, contratos de repositorios e integración SQLite; `frontend/tests/document-workflow.test.mjs` y `document-controller.test.mjs` cubren revisión, conflictos de respuestas antiguas y confirmación múltiple con simulaciones.
+
+#### RF-04 — Historial de auditoría operativa
+
+GET `/api/v1/history` devuelve eventos persistidos, del más reciente al más antiguo, con UUID de evento/documento, tipo, fecha UTC y nombre original. Los tipos son `documento_cargado`, `documento_revisado` y `documento_registrado`. La escritura participa en la misma transacción SQLite que la operación documental; el protocolo de historial expone solo lectura. Sin usuarios autenticados, el evento no identifica operador. No existen firma, hash encadenado ni garantía contra manipulación administrativa de la base.
+
+La SPA comparte una consulta de historial entre las vistas y deriva métricas de fechas reales: primera revisión, antigüedad de pendientes, estados y actividad diaria/semanal/mensual. Distingue carga, error y conjunto vacío; no inventa eventos ni datos faltantes. Exportación CSV utiliza los vehículos recibidos.
+
+**Verificación:** `tests/e2e/test_history.py`, `tests/integration/test_sqlite_history_repository.py` y suites frontend de historial, métricas, tiempos y CSV.
+
+#### RF-05 — Lote y concurrencia
+
+POST `/api/v1/documents/batch` acepta entre 1 y 100 archivos en el campo repetido `files`, con límite individual de 10 MiB. Solicitud vacía o con campos distintos de `files` se rechaza; más de 100 archivos rechaza la solicitud completa. Cada resultado conserva el orden de entrada e incluye nombre, ID si se llegó a almacenar, seis campos, `requiere_revision`, `fallo` y `error`.
+
+Un fallo por archivo no interrumpe los siguientes: los campos quedan nulos, `fallo=true`, `requiere_revision=false` y error explícito. Si falla la extracción después de guardar, el resultado conserva el ID del original, pero no agrega el pendiente SQLite. El lote devuelve HTTP 200 con resultados mixtos y no confirma vehículos.
+
+**Concurrencia real:** `ProcessBatchDocumentsUseCase.execute` espera cada `asyncio.to_thread` antes de procesar el siguiente archivo: hay un archivo en proceso por lote, fuera del event loop. Esto permite atender otras solicitudes, pero no paraleliza archivos del mismo lote. Paralelismo interno y límites globales de trabajo quedan pendientes. Cambiarlos requerirá preservar orden, aislamiento por archivo, memoria acotada y atomicidad de confirmación.
+
+**Verificación:** pruebas de lote en `tests/test_documents.py` y `tests/unit/test_document_use_cases.py`; cliente HTTP y flujo en `frontend/tests/`.
+
+### 3.2. Requisitos no funcionales
+
+| ID | Contrato actual y condición verificable | Limitación u objetivo pendiente |
+| --- | --- | --- |
+| NFR-01 Latencia | OCR usa `TESSERACT_TIMEOUT`, entero positivo, 30 s por invocación de Tesseract por defecto. No es un timeout total de solicitud; varias páginas pueden sumar varias invocaciones. | No hay medición p95 ni SLO aprobado para lectura/extracción. Antes de fijarlos, medir p50/p95, errores y memoria sobre documentos sintéticos, registrando hardware, versiones, volumen, tamaño y concurrencia; separar PDF nativo, imagen y PDF escaneado. No prometer milisegundos sin esa evidencia. |
+| NFR-02 Concurrencia | Un archivo activo por lote; trabajo bloqueante fuera del event loop. Confirmaciones usan transacciones `BEGIN IMMEDIATE` para serializar escrituras. | No hay tasa de RPS, número de usuarios simultáneos ni capacidad global acreditada. Ensayar solicitudes paralelas y confirmaciones simultáneas sobre el mismo documento; exigir un solo ingreso y 409 para duplicados. Registrar throughput y errores SQLite antes de aprobar un objetivo de capacidad. |
+| NFR-03 Límites de carga | 10 MiB por archivo y hasta 100 archivos por lote. Copia de bytes en bloques y renderizado OCR de una página por vez. | No hay límite propio de páginas, píxeles, tiempo total del lote o tasa global de solicitudes. Los límites de bytes no equivalen a un presupuesto de memoria o CPU del OCR. |
+| NFR-04 Integridad y recuperación | SQLite guarda documento, ingreso e historial transaccionalmente en revisión/confirmación. Los estados persisten tras reinicio. La SPA informa errores, evita doble envío y consulta el estado tras una confirmación incierta. | Sin SLA de disponibilidad, backups/restauración automatizados, retención ni transacción única entre disco y SQLite. |
+| NFR-05 Seguridad y privacidad | Nombres internos UUID, validación de rutas/nombres y consultas parametrizadas; secretos fuera de Git. Evaluación local con documentos sintéticos. | Sin autenticación/autorización, rate limiting, antivirus, TLS propio, cifrado en reposo ni certificación normativa. CORS permisivo por defecto. No declarar preparación para producción. |
+| NFR-06 Calidad y compatibilidad | Ruff y Pyright estricto, 11 baterías AST, auditorías estrictas y suites completas aprobadas antes de integrar. CI prueba Linux/Python 3.10/pypdf 6.20.1, Linux/Python 3.13/pypdf 7.0.0 y Windows/Python 3.13/pypdf 7.0.0. | Los mocks de OCR y las pruebas de renderizado no acreditan precisión real ni interacción integral en navegador. |
+
+## 4. Stack, arquitectura y configuración
+
+### 4.1. Stack implementado
+
+- Python 3.10+, FastAPI/Uvicorn, Pydantic v2 y pydantic-settings.
+- Carga multipart: `python-multipart>=0.0.18`; PDF: `pypdf>=6.20.1`, con verificación explícita de pypdf 6.20.1 y 7.0.0 en CI.
+- OCR: pytesseract 0.3.13, Pillow, pypdfium2 y ejecutable externo Tesseract con idiomas `spa+eng` por defecto.
+- Persistencia: `sqlite3` síncrono de la biblioteca estándar. No hay ORM, broker, cola distribuida ni servicio externo de OCR.
+- SPA React 19, TypeScript 6, Vite 8 y CSS. Pruebas con runner nativo de Node, TypeScript y simulaciones; ESLint y TypeScript/Vite para calidad y build.
+- Desarrollo backend: pytest/pytest-asyncio/HTTPX, Ruff 0.16.8, Pyright 1.1.414 y hooks pre-commit. El runner pre-commit se instala aparte si no está disponible.
+
+### 4.2. Estructura existente y regla de dependencias
+
+```text
+src/
+  domain/                 Registros, validaciones, eventos y protocolos Repository
+  application/
+    dtos/                 Entradas y resultados independientes de HTTP
+    use_cases/            Carga, extracción, revisión, confirmación, alta y lote
+    text_extraction.py    Protocolo TextExtractor y política de fallback PDF
+    title_field_extraction.py  Parser puro de los seis campos
+  adapters/               Paquete vacío, reservado; no hay controladores propios
+  infrastructure/
+    fastapi/routers/      Transporte HTTP delgado
+    fastapi/              Composición de dependencias y traducción de errores
+    extraction/           Estrategias PDF/OCR y fábrica por MIME
+    persistence/          Archivos, metadatos y repositorios SQLite
+    settings/             Configuración y logging
+  main.py                 Composition root ASGI y ciclo de vida
+frontend/
+  src/App.tsx             Vistas y estado compartido
+  src/views/              Inicio, carga, vehículos, métricas, historial, ayuda y ajustes
+  src/components/         Controles, revisión, tablas y gráficos
+  src/hooks/              Consultas y flujo de revisión/confirmación
+  src/services/api.ts     Cliente HTTP y validación de respuestas
+  src/types/              Contratos TypeScript
+  src/utils/              Métricas, prioridades, búsqueda y CSV
+  tests/                  Suites node:test
+tests/                    Unitarias, integración, endpoints y auditorías AST
+docs/                     SRS y guía pedagógica
 ```
-.
-├── .env                                         # Variables de entorno secretas (NUNCA en git)
-├── .env.example                                 # Plantilla canónica de variables de entorno
-├── .gitignore                                   # Exclusiones estándar (ignora .env, __pycache__, .venv)
-│
-├── src/
-│   ├── domain/                                  # CÍRCULO 1: Reglas de Negocio del Negocio (DDD Puro)
-│   │   └── {bounded_context_tematico}/          # Bounded Context temático (Grita el dominio)
-│   │       ├── __init__.py                      # (0 bytes obligatorio)
-│   │       ├── entities.py                      # Entidades de negocio con identidad ({Entidad_1}, {Entidad_2})
-│   │       ├── value_objects.py                 # Value Objects inmutables ({VO_1}, {VO_2})
-│   │       ├── services.py                      # Servicios de Dominio / Lógica multi-entidad ({ServicioDominio_1})
-│   │       ├── repositories.py                  # Interfaces abstractas de repositorios ({Entidad_1}Repository)
-│   │       ├── events.py                        # Eventos de Dominio ({EventoDominio_1})
-│   │       └── exceptions.py                    # Excepciones de negocio de dominio puro
-│   │
-│   ├── application/                             # CÍRCULO 2: Reglas de la Aplicación (Casos de Uso / Interactors)
-│   │   └── {bounded_context_tematico}/
-│   │       ├── __init__.py                      # (0 bytes obligatorio)
-│   │       ├── use_cases/                       # Orquestación de Casos de Uso (Verbos que gritan la acción)
-│   │       │   ├── {nombre_caso_uso_1_verbo}.py # class {NombreCasoUso1}UseCase(execute)
-│   │       │   └── {nombre_caso_uso_2_verbo}.py # class {NombreCasoUso2}UseCase(execute)
-│   │       ├── dtos/                            # Data Transfer Objects (Pydantic BaseModel)
-│   │       │   ├── {nombre_dto_request}.py      # class {NombreCasoUso1}Request
-│   │       │   └── {nombre_dto_response}.py     # class {NombreCasoUso1}Response
-│   │       └── mappers/                         # Traductores bidireccionales puros DTO <-> Entity
-│   │           └── {nombre_mapper}.py           # class {NombreEntidad}Mapper
-│   │
-│   ├── adapters/                                # CÍRCULO 3: Interface Adapters (Agnósticos de Frameworks Web)
-│   │   └── {bounded_context_tematico}/
-│   │       ├── __init__.py                      # (0 bytes obligatorio)
-│   │       ├── controllers/                     # Controladores que reciben DTOs y llaman al UseCase
-│   │       │   └── {nombre_controlador}.py      # class {NombreEntidad}Controller
-│   │       ├── presenters/                      # Formatean ResponseDTO o excepciones a HTTP/JSON/ViewModel
-│   │       │   └── {nombre_presentador}.py      # class {NombreEntidad}Presenter
-│   │       ├── gateways/                        # Adaptadores hacia servicios externos (APIs, notificaciones)
-│   │       │   └── {nombre_gateway}.py          # class {NombreServicioExterno}Gateway
-│   │       └── view_models/                     # (Opcional) Modelos para renderizado visual server-side
-│   │
-│   ├── infrastructure/                          # CÍRCULO 4: Frameworks & Drivers (Detalles Externos)
-│   │   ├── fastapi/                             # Mecanismo de entrega Web
-│   │   │   ├── routers/                         # Endpoints REST delgados (Thin Controllers)
-│   │   │   └── dependencies.py                  # Inyección de dependencias (Depends)
-│   │   ├── {orm_driver_dir}/                    # Persistencia concreta (ej. sqlalchemy)
-│   │   │   ├── models/                          # DeclarativeBase y esquemas de tablas
-│   │   │   └── repositories/                    # Implementaciones concretas de domain/.../repositories.py
-│   │   ├── {broker_driver_dir}/                 # Daemons/suscriptores para mensajería (si aplica)
-│   │   └── settings/                            # Configuración y Logging Centralizado
-│   │       ├── __init__.py                      # (0 bytes obligatorio)
-│   │       ├── config.py                        # Settings(BaseSettings) con pydantic-settings
-│   │       └── logger.py                        # Logging estructurado JSON/texto configurado desde Settings
-│   │
-│   └── main.py                                  # Entrypoint ASGI (app = create_app())
-│
-└── tests/
-    ├── __init__.py                              # (0 bytes obligatorio)
-    ├── test_architecture.py                     # Validador AST del Guantelete de Restricciones
-    ├── unit/                                    # Pruebas unitarias de domain y use_cases
-    ├── integration/                             # Pruebas de integración con DB/broker
-    └── e2e/                                     # Pruebas de endpoints FastAPI (httpx.AsyncClient)
-```
 
-### 4.3. Especificación de Configuración & Logging Centralizado
+Dominio no importa aplicación ni infraestructura; aplicación coordina protocolos y funciones inyectadas sin importar FastAPI, SQLite ni motores externos. Infraestructura implementa los puertos y selecciona estrategias. Los routers delegan casos de uso; `src/main.py` compone repositorios. La SPA consume HTTP y no tiene acceso directo a SQLite o archivos del servidor. No se crean carpetas de plantilla ni abstracciones sin uso.
 
-#### A. Gestión de Entorno (`.env`, `.env.example`, `.gitignore`)
-* **Regla de Seguridad:** El archivo `.env` contiene credenciales sensibles y **NUNCA** se commitea a Git. El archivo [`.gitignore`](file:///home/agustin/proyectos_software/spec/.gitignore) debe excluir explícitamente `.env` y `.env.*` (excepto `!.env.example`).
-* **Plantilla Canónica (`.env.example`):** Define todas las claves de configuración necesarias con valores ficticios o de desarrollo para guiar el setup local y pipelines de CI/CD.
+### 4.3. Configuración y ejecución local
 
-#### B. `src/infrastructure/settings/config.py` (Pydantic Settings)
-* Centraliza toda la configuración del sistema en una clase `Settings` derivada de `pydantic_settings.BaseSettings`:
-  ```python
-  from functools import lru_cache
-  from typing import List
-  from pydantic import Field
-  from pydantic_settings import BaseSettings, SettingsConfigDict
+`src/infrastructure/settings/config.py` centraliza Settings, variables de entorno y `.env` UTF-8, con caché de `get_settings`. `.env.example` es orientativo; `.env` y variantes se ignoran salvo el ejemplo. SECRET_KEY y ACCESS_TOKEN_EXPIRE_MINUTES existen como configuración, pero no implementan autenticación. `logger.py` emite logs de texto a stdout con nivel configurable; no hay logging JSON implementado.
 
+| Parámetro | Predeterminado y efecto |
+| --- | --- |
+| ENVIRONMENT / DEBUG / LOG_LEVEL | development / false / INFO |
+| PROJECT_NAME / VERSION | backend-api / 1.0.0, metadatos OpenAPI |
+| API_V1_PREFIX | /api/v1; prefijo API y documentación |
+| ALLOWED_HOSTS | Lista con asterisco; se usa para orígenes CORS, no como filtro de Host |
+| DATABASE_URL | sqlite+aiosqlite:///./app.db; también acepta sqlite:///; usa sqlite3 síncrono |
+| TESSERACT_CMD | Ruta estándar de Windows; en Linux/macOS busca tesseract con shutil.which y conserva el nombre si no está instalado |
+| TESSERACT_LANG | spa+eng; instalar ambos idiomas por separado |
+| TESSERACT_TIMEOUT | 30 segundos, entero mayor que cero |
 
-  class Settings(BaseSettings):
-      model_config = SettingsConfigDict(
-          env_file=".env",
-          env_file_encoding="utf-8",
-          case_sensitive=True,
-          extra="ignore",
-      )
+Variables de entorno y `.env` prevalecen sobre valores predeterminados. Los originales y metadatos se guardan en `uploads/` desde la raíz del repositorio. Las tablas se inicializan al iniciar la API; `app.db` se resuelve desde el directorio de ejecución. No publicar estos archivos ni usar títulos reales en ejemplos.
 
-      # Entorno
-      ENVIRONMENT: str = Field(default="development")
-      DEBUG: bool = Field(default=False)
-      LOG_LEVEL: str = Field(default="INFO")
+Desde la raíz, crear/activar `.venv` e instalar `requirements-dev.txt`; para ejecución sin herramientas usar `requirements.txt`. Iniciar con `python -m uvicorn src.main:app --reload --host 127.0.0.1 --port 8000`. En otra terminal, `cd frontend`, `npm ci` y `npm run dev -- --host 127.0.0.1`. Frontend requiere Node 22.12 o superior de la rama 22, o una versión posterior compatible con Vite.
 
-      # API
-      PROJECT_NAME: str = Field(default="{nombre_del_sistema_o_proyecto}")
-      VERSION: str = Field(default="1.0.0")
-      API_V1_PREFIX: str = Field(default="/api/v1")
-      ALLOWED_HOSTS: List[str] = Field(default_factory=lambda: ["*"])
+La base HTTP de la SPA está fijada en `frontend/src/services/api.ts` a `http://127.0.0.1:8000/api/v1`; no hay proxy ni variable Vite para cambiarla. Un cambio de puerto/prefijo exige alinear el cliente y CORS. Navegación de SPA mediante estado React local, sin router de URLs. Configuración contiene controles de demostración; no ofrece administración real de usuarios/notificaciones.
 
-      # Seguridad
-      SECRET_KEY: str = Field(default="insecure-secret-key-change-in-production")
-      ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=60)
+### 4.4. Convenciones efectivamente verificadas
 
-      # Base de Datos
-      DATABASE_URL: str = Field(default="sqlite+aiosqlite:///./app.db")
+Archivos `__init__.py` de src y tests vacíos, imports Python absolutos, anotaciones de parámetros/retornos de dominio y aplicación, cabecera con ruta relativa en archivos Python, sin print en producción ni acceso al entorno fuera de Settings. Las once baterías AST definen el alcance comprobado; no sustituyen auditoría integral de seguridad. Pyright comprueba todo `src/` en modo estricto según `pyrightconfig.json`; tests quedan fuera del alcance de tipado, pero se ejecutan. `.vscode/settings.json` versionado alinea el editor y `.venv`. Stubs locales en `typings/` cubren la superficie usada de pytesseract/pypdfium2 y requieren revisión al cambiar esas APIs.
 
+## 5. Calidad, trazabilidad y aceptación
 
-  @lru_cache()
-  def get_settings() -> Settings:
-      return Settings()
-  ```
+### 5.1. Matriz reproducible
 
-#### C. `src/infrastructure/settings/logger.py` (Logging Estructurado)
-* Centraliza la inicialización de loggers con formato estructurado (JSON en producción, formateado en desarrollo):
-  ```python
-  import logging
-  import sys
-  from src.infrastructure.settings.config import get_settings
-
-
-  def setup_logging() -> logging.Logger:
-      settings = get_settings()
-      log_level = getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO)
-
-      logging.basicConfig(
-          level=log_level,
-          format="%(asctime)s | %(levelname)-8s | %(name)s:%(funcName)s:%(lineno)d - %(message)s",
-          handlers=[logging.StreamHandler(sys.stdout)],
-      )
-      logger = logging.getLogger(settings.PROJECT_NAME)
-      logger.setLevel(log_level)
-      return logger
-
-
-  logger = setup_logging()
-  ```
-
----
-
-### 4.4. Las Siete Reglas Innegociables de Arquitectura
-
-1. **Regla de Dependencia de Capas (Validada por AST):**
-   * `domain` nunca importa de capas externas (`application`, `adapters`, `infrastructure`).
-   * `application` solo depende de `domain` y `pydantic`.
-   * `adapters` depende de `application` y `domain` (nunca de `infrastructure` ni de FastAPI/ORM).
-   * `infrastructure` aísla frameworks, bases de datos y librerías externas.
-2. **Archivos `__init__.py` de 0 Bytes:**
-   * El 100% de los archivos `__init__.py` en `src/` y `tests/` deben estar completamente vacíos (0 bytes) para evitar dependencias circulares y efectos secundarios al importar módulos.
-3. **Desacople Absoluto de Datos (`data/`):**
-   * Fuentes de verdad estáticas (JSON, Markdown, YAML) residen en `data/` desacopladas del código ejecutable.
-4. **Gobernanza Antialucinación de Parámetros Críticos:**
-   * Precios, constantes de ingeniería, reglas tarifarias y fórmulas clave deben provenir de `Settings` o base de datos, nunca *hardcoded* en código fuente.
-5. **Controladores Delgados (*Thin Controllers*):**
-   * Los routers en `infrastructure/fastapi/routers/` no contienen lógica de negocio ni importan ORMs directamente; delegan exclusivamente en `adapters/controllers/` o `application/use_cases/`.
-6. **Imports Absolutos:**
-   * Prohibidos los imports relativos (`from . import ...` o `from .. import ...`). Se exige siempre sintaxis absoluta `from src....`.
-7. **Tipado Estricto Exhaustivo:**
-   * Prohibidas colecciones o variables sin tipo explícito (e.g. `list[str]`, `dict[str, Any]`). Toda función debe especificar tipos de parámetros y retorno validados por Pyright.
-8. **Cabecera de Path Relativo (Trazabilidad):**
-   * Todo archivo fuente `.py` en `src/` y `tests/` debe comenzar con un docstring o comentario indicando su ruta relativa exacta respecto a la raíz del repositorio (e.g. `"""src/main.py — ..."""` o `"""tests/test_architecture.py — ..."""`). Se excluyen terminantemente los archivos `__init__.py` que deben tener exactamente 0 bytes según la Regla 2.
-
----
-
-## 5. Gobernanza Normativa, Calidad & Matriz de Pruebas
-
-### 5.1. Filosofía de Desarrollo Asistido por Agentes IA ("The Constraint Gauntlet")
-> *"Mi estrategia actual es no leer el código generado por mis agentes. Lo que hago en su lugar es rodearlos de **restricciones extremas**: Unit tests, QA procedures, métricas de calidad, mutation testing, coverage... Tengo muy alta confianza en el código porque tiene que superar todo mi guantelete de restricciones."*
-> — **Robert C. Martin ("Uncle Bob")**
-
-Bajo este paradigma, el equipo de ingeniería y los agentes de IA operan dentro de un marco de verificación estricto, automatizado y determinista donde ningún código se fusiona a producción sin superar el 100% de los invariantes formales.
-
-### 5.2. Las 11 Baterías del Guantelete (`tests/test_architecture.py`)
-1. **`test_no_hardcoded_secrets`:** Detecta y bloquea contraseñas, tokens JWT, API keys o connection strings quemadas en código fuente.
-2. **`test_no_raw_sql_formatting`:** Prohíbe concatenación de strings o f-strings en `text(...)` para mitigar vectores de SQL Injection (OWASP).
-3. **`test_no_os_environ_direct_access`:** Prohíbe el acceso directo a `os.environ` u `os.getenv` fuera de `src/infrastructure/settings/config.py`.
-4. **`test_domain_isolation`:** Garantiza que el Core de Dominio (`src/domain`) sea 100% puro y no importe frameworks ni librerías de I/O.
-5. **`test_application_and_adapters_layers`:** Valida la regla de dependencia de capas (Application desacoplada, Adapters agnósticos y Thin Controllers sin acceso a ORMs).
-6. **`test_function_return_types`:** Exige que el 100% de las funciones en `src/domain` y `src/application` declaren tipo de retorno explícito (`-> Type`).
-7. **`test_function_arg_types`:** Exige que todos los parámetros de funciones en `domain` y `application` declaren Type Annotations.
-8. **`test_init_files_must_be_empty`:** Comprueba que todos los `__init__.py` en `src/` y `tests/` tengan exactamente 0 bytes (sin código, docstrings ni imports).
-9. **`test_no_relative_imports`:** Prohíbe imports relativos en `src/` (`from . import ...` o `from .. import ...`), obligando al uso de imports absolutos (`from src...`).
-10. **`test_no_unstructured_prints`:** Prohíbe llamadas a `print()` en código de producción (`src/`), exigiendo logging formal.
-11. **`test_relative_path_headers`:** Exige que todo archivo `.py` en `src/` y `tests/` comience con un docstring o comentario con su ruta relativa exacta (excluyendo `__init__.py` que debe tener 0 bytes).
-
-### 5.3. Detección Determinística de Código Muerto y Sobreingeniería (`tests/test_clean_design.py`)
-Complementando el Guantelete y el detector de Componentes Dios, el archivo `tests/test_clean_design.py` analiza el AST local ($0 tokens) para evitar los sesgos de sobreingeniería y código residual típicos de agentes IA:
-1. **`UNREACHABLE_FILE`:** Detecta archivos `.py` huérfanos en `src/` no alcanzables mediante el Grafo de Alcance desde `main.py` ni desde suites de tests.
-2. **`GHOST_INTERFACE`:** Alerta cuando un `Protocol` o `ABC` tiene solo una implementación concreta en `src/` (y 0 mocks en `tests/`), aplicando YAGNI.
-3. **`MIDDLE_MAN_METHOD`:** Identifica métodos que solo delegan argumentos de forma idéntica en otro objeto sin aportar valor ni lógica.
-4. **`DEEP_INHERITANCE`:** Detecta árboles de herencia con profundidad superior a 2 niveles (`DIT > 2`), promoviendo composición.
-5. **`ORPHAN_PRIVATE_SYMBOL`:** Identifica funciones, clases o métodos privados declarados pero nunca referenciados en el módulo.
-6. **`SPECULATIVE_MICRO_FILE`:** Detecta archivos micro-fragmentados (< 10 LOC) que dispersan el contexto sin justificación.
-
-Soporta ejecución humana (`python3 tests/test_clean_design.py`), modo estricto para CI (`--strict`) y salida estructurada para agentes IA (`--json`).
-
-### 5.4. Estándares de Calidad, Trazabilidad & Commits Atómicos
-* **Marco de Referencia:** Alineación con buenas prácticas de calidad de producto (ISO/IEC 25010) y seguridad de la información (ISO/IEC 27001).
-* **Lineamiento de Commits Atómicos (Principio de Responsabilidad Única en Git):**
-  * **Una Unidad Lógica por Commit:** Cada commit debe representar un cambio único, autocontenido, indivisible y con propósito claro. Queda estrictamente prohibido agrupar en un único commit features nuevas, refactorizaciones, corrección de bugs no relacionados y ajustes de formato cosmético.
-  * **Integridad del Repositorio:** Cada commit individual debe dejar el proyecto en un estado compilable, estable y pasando el 100% de la suite de tests y linters (cero commits con código roto o a medio implementar).
-  * **Aislamiento para Bisect y Revert:** La granularidad atómica asegura que cualquier regresión se aísle inmediatamente mediante `git bisect` y pueda revertirse con `git revert` limpiamente sin efectos secundarios ni destrucción de código colateral.
-  * **Regla del Conector "Y" (*And Rule*):** Si la descripción del commit necesita la conjunción "y" o "además" para describir lo realizado (e.g. `feat: add user login and fix footer style`), el commit NO es atómico y debe dividirse en micro-commits independientes.
-* **Convención Estricta de Mensajes ([Conventional Commits](https://www.conventionalcommits.org/)):**
-  * **Estructura Obligatoria:** `<tipo>(<alcance opcional>): <descripción concisa e imperativa>`
-  * **Tipos Permitidos:**
-    * `feat`: Nueva funcionalidad para el usuario o sistema.
-    * `fix`: Corrección de un defecto o bug.
-    * `refactor`: Cambio estructural de código sin alteración de funcionalidad externa ni adición de features/fixes.
-    * `test`: Creación o modificación de pruebas unitarias, de integración o de arquitectura.
-    * `docs`: Cambios exclusivos en documentación, especificaciones o comentarios.
-    * `chore`: Mantenimiento de configuración, dependencias o herramientas sin impacto en código de producción.
-    * `perf`: Optimizaciones de rendimiento o uso eficiente de memoria/recursos.
-
-### 5.5. Matriz de Verificación Automatizada Previa a Despliegues
-
-Todos los cambios deben superar el 100% de la siguiente batería de comandos antes de integrarse a la rama principal o desplegarse a producción:
+Desde la raíz con `.venv` activado:
 
 ```bash
-# 1. Linter y Verificación de Formato
-ruff check .
-ruff format --check .
-
-# 2. Análisis Estático de Tipos Estricto (respeta `pyrightconfig.json`; excluye `tests/` por diseño)
-pyright src/
-
-# 3. Validación de Arquitectura y Guantelete de Restricciones (AST)
-python3 tests/test_architecture.py
-
-# 4. Auditoría de Componentes Dios (Monolitos) y Sobreingeniería (YAGNI & Dead Code)
-python3 tests/test_god_components.py --strict
-python3 tests/test_clean_design.py --strict
-
-# 5. Suite Completa de Pruebas en Pytest (Unit, Integration, E2E y Gauntlet)
-pytest --maxfail=1 --disable-warnings -v
+python -m pip check
+python -m ruff check .
+python -m ruff format --check .
+python -m pyright src/
+python -X utf8 tests/test_architecture.py
+python -X utf8 tests/test_clean_design.py --strict
+python -X utf8 tests/test_god_components.py --strict
+python -X utf8 -m pytest -q
 ```
 
-### 5.6. Configuración del Editor (Pylance / VS Code)
+Para hooks: instalar `python -m pip install pre-commit` y ejecutar `python -m pre_commit run --all-files` con el entorno activado, de modo que los hooks locales usen su Python. Los hooks pueden modificar archivos; revisar el diff y repetir verificaciones antes de crear/publicar el commit definitivo. En un entorno que no permita escribir la caché pytest puede ejecutarse con `-p no:cacheprovider`, sin excluir pruebas.
 
-Todo repositorio debe incluir dos archivos de configuración de tipos para garantizar que el LSP del editor (Pylance) y el análisis estático de CI (Pyright) emitan **exactamente los mismos diagnósticos**:
+Desde `frontend/`, ejecutar `npm ci`, `npm test`, `npm run lint` y `npm run build`. Desde Bash en la raíz, `bash run.sh frontend-test` invoca la suite frontend sin crear un entorno Python. `npm run preview -- --host 127.0.0.1` permite evaluar el build. Las pruebas Node existentes son 78 al elaborar esta revisión; no agregar pruebas artificiales para alcanzar el conteo histórico de 41 mencionado en #6.
 
-1. **`pyrightconfig.json` (raíz)** — configura Pyright/Pylance:
-   ```json
-   {
-     "include": ["src"],
-     "exclude": ["tests", "venv", "**/__pycache__", "**/node_modules"],
-     "venvPath": ".",
-     "venv": "venv",
-     "typeCheckingMode": "standard",
-     "pythonVersion": "3.10"
-   }
-   ```
-2. **`.vscode/settings.json`** — alinea Pylance con la misma exclusión:
-   ```json
-   {
-     "python.analysis.exclude": ["tests", "venv", "**/__pycache__"]
-   }
-   ```
+CI de backend está en `.github/workflows/quality.yml` y se ejecuta en PR y push a main con la matriz indicada en NFR-06. Actualmente no ejecuta frontend: sus pruebas/lint/build se verifican localmente y se informan en el PR. La advertencia conocida de Starlette/HTTPX no se oculta ni se considera prueba de fallo funcional.
 
-**Motivación:** Pylance analiza archivos abiertos explícitamente aunque estén en el `exclude` de `pyrightconfig.json`. Sin `.vscode/settings.json`, los archivos de `tests/` emiten falsos positivos en el editor que no existen en CI — por ejemplo, los stubs de SQLAlchemy tipan `Model.__table__` como `FromClause`, por lo que `Model.__table__.create(engine)` se marca como error pese a ser válido en runtime.
+### 5.2. Procedimiento de cambios
 
-**Reglas innegociables:**
-- La exclusión de `tests/` del análisis de tipos es **deliberada** (los tests ejercitan ORMs en runtime). No debe "corregirse" con `cast(Any, ...)`, `# type: ignore` ni `# noqa`.
-- El `.vscode/settings.json` **debe versionarse**: en `.gitignore` usar el patrón `.vscode/*` (ignora el contenido) seguido de `!.vscode/settings.json` (re-incluye el archivo). Nunca ignorar el directorio con `.vscode/`, ya que Git no desciende a directorios ignorados.
-- `pyright` en CI debe ejecutarse como `pyright src/` (o confiar en el `exclude` de `pyrightconfig.json`); nunca sobre `tests/`.
+Analizar el issue y el código vigente, preservar cambios locales y trabajar en rama propia. Separar commits por unidad lógica con Conventional Commits; mantener pruebas y auditorías aprobadas. Publicar el PR con problema, alcance, resultados y limitaciones; comprobar directamente en GitHub SHA, CI y conflictos. La fusión del PR de #6 requiere autorización humana explícita para el resultado revisado. Después de integrar, verificar main, ejecutar las pruebas posteriores, informar en el issue y cerrar como completed solo con evidencia satisfactoria. Mantener abierto el EPIC #1 conforme a la instrucción del responsable.
+
+### 5.3. Aceptación documental de #6
+
+- SRS sin marcadores de plantilla, con RF-01 a RF-05, NFR, arquitectura y configuración contrastados con código.
+- README raíz y frontend describen la SPA existente, instalación y contratos reales.
+- Identidad del paquete `sistema-extraccion-titulos-automotores`; dependencias de runtime sincronizadas entre pyproject.toml y requirements.txt, incluidos pypdf y python-multipart.
+- Conservar el script frontend test ya existente; agregar su invocación a run.sh y aprobar la suite actual completa.
+- No presentar hash, paralelismo interno, SLO, autenticación ni precisión OCR real como capacidades implementadas. Su definición o implementación requiere una etapa específica; completar este documento no las crea.

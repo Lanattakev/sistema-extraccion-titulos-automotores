@@ -1,7 +1,7 @@
 [project]
-name = "backend-template"
+name = "sistema-extraccion-titulos-automotores"
 version = "1.0.0"
-description = "FastAPI Backend Template con Clean Architecture y Screaming DDD"
+description = "Extracción, revisión humana y registro de títulos automotores con FastAPI"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [

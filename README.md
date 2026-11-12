@@ -1,10 +1,10 @@
 # Extracción y registro de datos de títulos automotores
 
-Backend para cargar títulos automotores, proponer sus datos principales y registrar ingresos de vehículos. Busca reducir la transcripción manual mediante extracción conservadora y revisión humana.
+Aplicación local con backend FastAPI y SPA React 19 para cargar títulos automotores, proponer sus datos principales, revisarlos y registrar ingresos de vehículos. Busca reducir la transcripción manual mediante extracción conservadora y revisión humana.
 
 ## Estado del MVP
 
-MVP local con FastAPI, Swagger y persistencia SQLite. La extracción funciona sobre PDF con texto extraíble mediante pypdf y sobre JPG/JPEG/PNG mediante OCR local con Tesseract, pytesseract y Pillow. El OCR de imágenes está implementado y probado con mocks; esto no acredita precisión sobre documentos reales. El fallback OCR para PDF escaneado también está implementado. En PDF se intenta pypdf primero: si el parser no obtiene ningún campo válido del texto directo, se renderizan las páginas con pypdfium2 y se aplica el OCR existente con Tesseract.
+MVP local con SPA React 19, TypeScript y Vite, API FastAPI, Swagger y persistencia SQLite. La extracción funciona sobre PDF con texto extraíble mediante pypdf y sobre JPG/JPEG/PNG mediante OCR local con Tesseract, pytesseract y Pillow. El OCR de imágenes está implementado y probado con mocks; esto no acredita precisión sobre documentos reales. El fallback OCR para PDF escaneado también está implementado. En PDF se intenta pypdf primero: si el parser no obtiene ningún campo válido del texto directo, se renderizan las páginas con pypdfium2 y se aplica el OCR existente con Tesseract.
 
 ## Funcionalidades implementadas
 
@@ -15,6 +15,8 @@ MVP local con FastAPI, Swagger y persistencia SQLite. La extracción funciona so
 - Propuesta de `patente`, `marca`, `modelo`, `numero_motor`, `numero_chasis` y `anio` mediante el parser existente de etiquetas y reglas, reutilizado para texto directo de PDF y texto de OCR de imágenes o páginas PDF. Campos ausentes, inválidos o sin un candidato válido único quedan en `null`; las propuestas llevan `requiere_revision = true`.
 - Confirmación humana mediante `POST /api/v1/documents/{id_documento}/confirm`: recibe los seis campos revisados/corregidos, valida mediante `VehicleRecord`, toma el nombre original del documento como `archivo_origen` y persiste un `VehicleIntake` en SQLite con `requiere_revision = false`. Devuelve el registro creado con HTTP 201. Las correcciones humanas prevalecen sobre OCR; la confirmación no vuelve a ejecutar la extracción.
 - Alta y consulta de registros completos en SQLite, con UUID, fecha de ingreso, archivo de origen y marca de revisión.
+- SPA para carga por lote, revisión/corrección, confirmación individual o múltiple, consulta de documentos y vehículos, exportación CSV, historial y métricas calculadas desde datos persistidos. La confirmación múltiple de la SPA solo incluye documentos revisados.
+- Estados documentales `pendiente`, `revisado` y `registrado`, con historial transaccional de carga, revisión y registro. El historial no identifica operadores porque no hay autenticación.
 - Tests unitarios, de integración, de endpoints y de restricciones arquitectónicas.
 
 `extract-fields` propone los seis campos con `requiere_revision = true` y no guarda automáticamente un `VehicleRecord`. El usuario revisa/corrige esos campos y los envía a `/confirm`, que verifica la existencia del documento y obtiene su nombre original como `archivo_origen`; este valor no se recibe del usuario. Documento inexistente devuelve HTTP 404 y datos inválidos HTTP 422. El `VehicleIntake` confirmado se guarda y devuelve con `requiere_revision = false`.
@@ -23,7 +25,7 @@ El alta independiente `POST /api/v1/vehicles` conserva su comportamiento: exige 
 
 ## Funcionalidades pendientes
 
-- **Futuras, sin implementación actual:** interfaz dedicada de revisión y controles de autenticación y autorización. La revisión/corrección y confirmación ya pueden realizarse mediante la API o Swagger; todavía no hay frontend dedicado.
+- **Futuras, sin implementación actual:** autenticación/autorización, hash y deduplicación de documentos, notificaciones y políticas automatizadas de retención. Configuración conserva opciones visuales de demostración; no administra usuarios ni habilita notificaciones reales.
 
 ## Tecnologías
 
@@ -63,17 +65,48 @@ Con los valores predeterminados:
 
 SQLite crea la tabla al iniciar la aplicación y usa `app.db` en el directorio de ejecución (`DATABASE_URL` predeterminada: `sqlite+aiosqlite:///./app.db`). Los documentos y sus metadatos se guardan en `uploads/` en la raíz del proyecto. Cambiar `API_V1_PREFIX` modifica las rutas de la API y Swagger.
 
+## SPA: instalación, ejecución y arquitectura
+
+Frontend: React 19, TypeScript 6 y Vite 8. Requiere Node 22.12 o superior de la rama 22, o una versión posterior compatible con Vite, y npm. Con el backend en `http://127.0.0.1:8000`, abrir otra terminal desde la raíz:
+
+```bash
+cd frontend
+npm ci
+npm run dev -- --host 127.0.0.1
+```
+
+Abrir la URL informada por Vite (normalmente `http://127.0.0.1:5173`). `npm run dev` también inicia el servidor de desarrollo. `npm ci` instala las versiones de `frontend/package-lock.json`.
+
+El cliente tiene la base `http://127.0.0.1:8000/api/v1` definida en `frontend/src/services/api.ts`; no utiliza proxy de Vite ni una variable `VITE_API_URL`. Si se cambia el puerto o el prefijo de la API, hay que alinear ese cliente. CORS debe permitir el origen del frontend; `ALLOWED_HOSTS` configura los orígenes CORS pese a su nombre y su valor predeterminado es permisivo.
+
+`App.tsx` coordina las vistas y comparte los hooks `useVehicles`, `useHistory` y `useDocumentConfirmation`. `views/` contiene Inicio, Carga, Vehículos, Métricas, Historial, Configuración y Ayuda; `components/` contiene carga, revisión, tablas y gráficos; `services/api.ts` valida las respuestas HTTP; `types/` declara contratos y `utils/` calcula búsquedas, CSV y métricas. La navegación es estado React local, sin router de URLs. Las vistas operativas consultan la API; no sustituyen errores o listas vacías con datos de ejemplo. Configuración conserva opciones de demostración y el tema vive durante la sesión.
+
+Para usar el flujo: cargar archivos, procesar el lote, revisar/corregir los seis campos, guardar la revisión y confirmar. La SPA recupera los estados persistidos al volver a abrirse y bloquea confirmaciones duplicadas. La API mantiene la confirmación directa compatible de un pendiente con seis campos revisados explícitamente.
+
+```bash
+npm test
+npm run lint
+npm run build
+npm run preview -- --host 127.0.0.1
+```
+
+`npm test` ejecuta `node --test tests/*.test.mjs`: actualmente son 78 tests de lógica, cliente HTTP, controladores y renderizado con simulaciones; no son pruebas de navegador ni OCR real. `preview` requiere el build y sirve para evaluarlo localmente. Desde Bash en la raíz, `bash run.sh frontend-test` ejecuta la misma suite sin crear un entorno Python. Más detalles en [frontend/README.md](frontend/README.md).
+
 ## Uso por Swagger
 
 | Método y ruta predeterminada | Operación |
 | --- | --- |
 | `POST /api/v1/documents` | Cargar un documento en el campo multipart `file` |
+| `GET /api/v1/documents` | Recuperar documentos y sus estados persistidos |
+| `PATCH /api/v1/documents/{id_documento}/review` | Guardar los seis campos revisados |
+| `POST /api/v1/documents/batch` | Cargar y extraer un lote sin confirmar ingresos |
 | `POST /api/v1/documents/{id_documento}/extract-text` | Extraer texto de PDF con pypdf primero y fallback OCR, o de JPG/JPEG/PNG con OCR local |
 | `POST /api/v1/documents/{id_documento}/extract-fields` | Proponer los seis campos desde texto directo de PDF o texto de OCR de imágenes y PDF |
 | `POST /api/v1/documents/{id_documento}/confirm` | Confirmar los seis campos revisados/corregidos y guardar el ingreso con `requiere_revision = false` |
 | `POST /api/v1/vehicles` | Alta independiente con `archivo_origen` enviado por el usuario y `requiere_revision = true` |
 | `GET /api/v1/vehicles` | Listar ingresos |
 | `GET /api/v1/vehicles/{id}` | Consultar un ingreso por su identificador |
+| `GET /api/v1/history` | Consultar eventos de carga, revisión y registro |
 
 Para probar el flujo, usar un PDF sintético con texto, un PDF escaneado sintético o una imagen sintética JPG/JPEG/PNG: cargar el archivo, conservar su `id_documento`, solicitar la propuesta con `extract-fields`, revisar/corregir los seis campos y enviarlos a `POST /api/v1/documents/{id_documento}/confirm`. Las propuestas mantienen `requiere_revision = true`; el ingreso confirmado queda persistido con `requiere_revision = false`. Si el texto directo del PDF no aporta ningún campo válido al parser, se activa el fallback OCR. Un solo campo válido basta para conservar la extracción directa sin OCR; no se exige completar los seis campos.
 
@@ -122,9 +155,19 @@ requirements.txt
 requirements-dev.txt
 pyproject.toml
 run.sh                             # Utilidades para Bash
+frontend/
+  src/App.tsx                      # Coordinación de vistas y estado compartido
+  src/views/                       # Vistas de la SPA
+  src/components/                  # Componentes reutilizables
+  src/hooks/                       # Consultas y flujo de revisión/confirmación
+  src/services/api.ts              # Cliente HTTP y validación de respuestas
+  src/types/                       # Contratos TypeScript
+  src/utils/                       # Métricas, búsqueda y CSV
+  tests/                           # Runner nativo de Node
+  package-lock.json                # Dependencias reproducibles de frontend
 ```
 
-El SRS se está completando por etapas: las secciones 1.1 a 2.3 describen el contexto actual; el resto conserva contenido de plantilla que requiere revisión y no acredita funcionalidades implementadas.
+El [SRS canónico](docs/srs-spec-backend-fastapi.md) describe requisitos, arquitectura, límites y verificaciones. Distingue comportamiento implementado de objetivos pendientes: no se han acreditado SLO de latencia/concurrencia, hash documental ni precisión de OCR real.
 
 ## Seguridad y privacidad
 
@@ -146,7 +189,7 @@ curl -X POST http://127.0.0.1:8000/api/v1/documents/batch -F "files=@titulo.pdf"
 
 ## Roadmap breve
 
-1. Incorporar una interfaz dedicada de revisión y confirmación sobre el flujo ya disponible en la API.
+1. Definir y medir objetivos de latencia/concurrencia; evaluar hash documental, deduplicación y paralelismo interno del lote.
 2. Definir controles de acceso, retención de documentos y condiciones de despliegue antes de habilitar uso compartido.
 
 ## Contratos de repositorios (issue #2)
