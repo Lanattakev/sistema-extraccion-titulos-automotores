@@ -1,11 +1,11 @@
 # SRS-SPECS: {nombre_del_sistema_o_proyecto} — Single Source of Truth (SSOT) & Especificación del Sistema
 
-> **Documento:** `srs-spec-backend-fastapi.md`  
-> **Versión:** `{version_documento_ej_1_0_0}`  
-> **Estado:** `{borrador_en_revision_aprobado}`  
-> **Fecha:** `{fecha_actual_o_release}`  
-> **Autor(es):** `{autor_o_equipo_responsable}`  
-> **Repositorio / Módulo:** `{organizacion_o_usuario}/{nombre_del_repositorio}`  
+> **Documento:** `srs-spec-backend-fastapi.md`
+> **Versión:** `{version_documento_ej_1_0_0}`
+> **Estado:** `{borrador_en_revision_aprobado}`
+> **Fecha:** `{fecha_actual_o_release}`
+> **Autor(es):** `{autor_o_equipo_responsable}`
+> **Repositorio / Módulo:** `{organizacion_o_usuario}/{nombre_del_repositorio}`
 
 > 💡 **Acompañamiento Pedagógico:** Antes de completar esta plantilla, se recomienda consultar la [Guía de Andamiaje Pedagógico y Metacognición](../docs/guia-andamiaje-proyectos.md) para reflexionar sobre los problemas de negocio, casos de borde y evitar la sobreingeniería.
 
@@ -179,6 +179,7 @@
   from pydantic import Field
   from pydantic_settings import BaseSettings, SettingsConfigDict
 
+
   class Settings(BaseSettings):
       model_config = SettingsConfigDict(
           env_file=".env",
@@ -205,6 +206,7 @@
       # Base de Datos
       DATABASE_URL: str = Field(default="sqlite+aiosqlite:///./app.db")
 
+
   @lru_cache()
   def get_settings() -> Settings:
       return Settings()
@@ -217,10 +219,11 @@
   import sys
   from src.infrastructure.settings.config import get_settings
 
+
   def setup_logging() -> logging.Logger:
       settings = get_settings()
       log_level = getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO)
-      
+
       logging.basicConfig(
           level=log_level,
           format="%(asctime)s | %(levelname)-8s | %(name)s:%(funcName)s:%(lineno)d - %(message)s",
@@ -229,6 +232,7 @@
       logger = logging.getLogger(settings.PROJECT_NAME)
       logger.setLevel(log_level)
       return logger
+
 
   logger = setup_logging()
   ```
@@ -262,7 +266,7 @@
 ## 5. Gobernanza Normativa, Calidad & Matriz de Pruebas
 
 ### 5.1. Filosofía de Desarrollo Asistido por Agentes IA ("The Constraint Gauntlet")
-> *"Mi estrategia actual es no leer el código generado por mis agentes. Lo que hago en su lugar es rodearlos de **restricciones extremas**: Unit tests, QA procedures, métricas de calidad, mutation testing, coverage... Tengo muy alta confianza en el código porque tiene que superar todo mi guantelete de restricciones."*  
+> *"Mi estrategia actual es no leer el código generado por mis agentes. Lo que hago en su lugar es rodearlos de **restricciones extremas**: Unit tests, QA procedures, métricas de calidad, mutation testing, coverage... Tengo muy alta confianza en el código porque tiene que superar todo mi guantelete de restricciones."*
 > — **Robert C. Martin ("Uncle Bob")**
 
 Bajo este paradigma, el equipo de ingeniería y los agentes de IA operan dentro de un marco de verificación estricto, automatizado y determinista donde ningún código se fusiona a producción sin superar el 100% de los invariantes formales.

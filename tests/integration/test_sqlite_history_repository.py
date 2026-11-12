@@ -33,7 +33,9 @@ def reject_history_event(path, event_type):
         """)
 
 
-@pytest.mark.parametrize("event_type", ["documento_cargado", "documento_revisado", "documento_registrado"])
+@pytest.mark.parametrize(
+    "event_type", ["documento_cargado", "documento_revisado", "documento_registrado"]
+)
 def test_history_failure_rolls_back_the_whole_operation(repositories, event_type):
     path, vehicles, documents = repositories
     vehicle = VehicleRecord("AB123CD", "Toyota", "Corolla", "M1", "C1", 2020)
@@ -61,8 +63,13 @@ def test_same_timestamp_uses_insertion_order_as_tiebreaker(repositories):
     documents.save_pending(DocumentRecord("first", "uno.pdf"))
     documents.save_pending(DocumentRecord("second", "dos.pdf"))
     with closing(sqlite3.connect(path)) as connection, connection:
-        connection.execute("UPDATE history_events SET fecha_evento = ?", ("2026-10-24T12:00:00.000000+00:00",))
-    assert [event.id_documento for event in documents.history_repository.list_all()] == ["second", "first"]
+        connection.execute(
+            "UPDATE history_events SET fecha_evento = ?", ("2026-10-24T12:00:00.000000+00:00",)
+        )
+    assert [event.id_documento for event in documents.history_repository.list_all()] == [
+        "second",
+        "first",
+    ]
 
 
 def test_concurrent_confirmations_record_exactly_one_registration_event(repositories):
@@ -84,5 +91,7 @@ def test_concurrent_confirmations_record_exactly_one_registration_event(reposito
         assert sorted(pool.map(lambda _: confirm(), range(2))) == ["conflict", "registered"]
     assert len(vehicles.list_all()) == 1
     assert [event.tipo_evento for event in documents.history_repository.list_all()] == [
-        "documento_registrado", "documento_revisado", "documento_cargado",
+        "documento_registrado",
+        "documento_revisado",
+        "documento_cargado",
     ]

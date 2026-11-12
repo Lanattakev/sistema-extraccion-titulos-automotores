@@ -12,7 +12,7 @@ repos:
       - id: check-added-large-files
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.6.9
+    rev: v0.16.8
     hooks:
       - id: ruff
         args: [ --fix ]
@@ -22,20 +22,20 @@ repos:
     hooks:
       - id: architecture-gauntlet
         name: El Guantelete de Restricciones (Architecture AST)
-        entry: python tests/test_architecture.py
+        entry: python -X utf8 tests/test_architecture.py
         language: system
         pass_filenames: false
         always_run: true
 
       - id: god-components-detector
         name: Detector de Componentes Dios (God Objects)
-        entry: python tests/test_god_components.py --strict
+        entry: python -X utf8 tests/test_god_components.py --strict
         language: system
         pass_filenames: false
         always_run: true
       - id: clean-design-detector
         name: Detector de Código Muerto y Sobreingeniería (Clean Design & YAGNI)
-        entry: python tests/test_clean_design.py --strict
+        entry: python -X utf8 tests/test_clean_design.py --strict
         language: system
         pass_filenames: false
         always_run: true

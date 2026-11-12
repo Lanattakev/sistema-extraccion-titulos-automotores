@@ -21,8 +21,12 @@ class TestSQLiteVehicleRepository(TestCase):
         self.repository = SQLiteVehicleRepository(self.db_path)
         self.intake = VehicleIntake(
             vehicle=VehicleRecord(
-                patente="AB123CD", marca="Ford", modelo="Focus SE",
-                numero_motor="MOTOR123", numero_chasis="CHASIS456", anio=2020,
+                patente="AB123CD",
+                marca="Ford",
+                modelo="Focus SE",
+                numero_motor="MOTOR123",
+                numero_chasis="CHASIS456",
+                anio=2020,
             ),
             archivo_origen="titulo.pdf",
         )
@@ -126,12 +130,19 @@ class TestSQLiteVehicleRepository(TestCase):
             for intake in original:
                 connection.execute(
                     "INSERT INTO vehicle_intakes VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    (intake.id_interno, intake.fecha_ingreso.isoformat(), intake.archivo_origen,
-                     int(intake.requiere_revision), *asdict(intake.vehicle).values()),
+                    (
+                        intake.id_interno,
+                        intake.fecha_ingreso.isoformat(),
+                        intake.archivo_origen,
+                        int(intake.requiere_revision),
+                        *asdict(intake.vehicle).values(),
+                    ),
                 )
                 connection.execute("INSERT INTO legacy_links VALUES (?)", (intake.id_interno,))
         migrated = SQLiteVehicleRepository(legacy_path)
-        for number, (before, after) in enumerate(zip(original, migrated.list_all(), strict=True), 1):
+        for number, (before, after) in enumerate(
+            zip(original, migrated.list_all(), strict=True), 1
+        ):
             self.assertEqual(after.numero_registro, number)
             self.assertEqual(asdict(after), {**asdict(before), "numero_registro": number})
         reopened = SQLiteVehicleRepository(legacy_path)
@@ -141,5 +152,7 @@ class TestSQLiteVehicleRepository(TestCase):
         self.assertEqual(third.numero_registro, 3)
         with closing(sqlite3.connect(legacy_path)) as connection:
             self.assertEqual(connection.execute("PRAGMA foreign_key_check").fetchall(), [])
-            self.assertEqual(connection.execute("SELECT * FROM legacy_links").fetchall(),
-                             [(intake.id_interno,) for intake in original])
+            self.assertEqual(
+                connection.execute("SELECT * FROM legacy_links").fetchall(),
+                [(intake.id_interno,) for intake in original],
+            )

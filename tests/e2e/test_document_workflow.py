@@ -11,8 +11,12 @@ from src.main import create_app
 from tests.test_documents import make_pdf
 
 FIELDS = {
-    "patente": "AB123CD", "marca": "Toyota", "modelo": "Corolla",
-    "numero_motor": "M123", "numero_chasis": "C456", "anio": 2020,
+    "patente": "AB123CD",
+    "marca": "Toyota",
+    "modelo": "Corolla",
+    "numero_motor": "M123",
+    "numero_chasis": "C456",
+    "anio": 2020,
 }
 
 
@@ -25,9 +29,12 @@ def client(monkeypatch, tmp_path):
 
 
 def upload(client, text="Dominio: AB123CD"):
-    response = client.post("/api/v1/documents/batch", files=[
-        ("files", ("titulo.pdf", make_pdf(text))),
-    ])
+    response = client.post(
+        "/api/v1/documents/batch",
+        files=[
+            ("files", ("titulo.pdf", make_pdf(text))),
+        ],
+    )
     assert response.status_code == 200
     assert response.json()[0]["fallo"] is False
     return response.json()[0]["id_documento"]
@@ -99,11 +106,20 @@ def test_extraction_never_overwrites_human_review_or_registered_state(client):
             assert client.post(path + "/confirm", json=corrections).status_code == 201
 
 
-@pytest.mark.parametrize("key,value", [
-    ("patente", " "), ("marca", None), ("modelo", ""), ("numero_motor", 23),
-    ("numero_chasis", ""), ("anio", 0), ("anio", True), ("anio", "2020"),
-    ("estado", "registrado"),
-])
+@pytest.mark.parametrize(
+    "key,value",
+    [
+        ("patente", " "),
+        ("marca", None),
+        ("modelo", ""),
+        ("numero_motor", 23),
+        ("numero_chasis", ""),
+        ("anio", 0),
+        ("anio", True),
+        ("anio", "2020"),
+        ("estado", "registrado"),
+    ],
+)
 def test_invalid_review_leaves_document_pending(client, key, value):
     document_id = upload(client)
     response = client.patch(f"/api/v1/documents/{document_id}/review", json={**FIELDS, key: value})
@@ -130,11 +146,14 @@ def test_stale_confirmation_cannot_overwrite_a_new_review(client):
 
 
 def test_mixed_batch_only_persists_successful_documents(client):
-    response = client.post("/api/v1/documents/batch", files=[
-        ("files", ("uno.pdf", make_pdf("Dominio: AB123CD"))),
-        ("files", ("roto.pdf", b"invalid pdf")),
-        ("files", ("tres.pdf", make_pdf("Dominio: CD456EF"))),
-    ])
+    response = client.post(
+        "/api/v1/documents/batch",
+        files=[
+            ("files", ("uno.pdf", make_pdf("Dominio: AB123CD"))),
+            ("files", ("roto.pdf", b"invalid pdf")),
+            ("files", ("tres.pdf", make_pdf("Dominio: CD456EF"))),
+        ],
+    )
     assert [item["fallo"] for item in response.json()] == [False, True, False]
     saved = client.get("/api/v1/documents").json()
     assert [item["nombre_original"] for item in saved] == ["uno.pdf", "tres.pdf"]

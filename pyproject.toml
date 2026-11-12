@@ -9,6 +9,8 @@ dependencies = [
     "uvicorn[standard]>=0.31.0",
     "pydantic>=2.9.0",
     "pydantic-settings>=2.5.0",
+    "python-multipart>=0.0.18",
+    "pypdf>=6.20.1",
     "pytesseract==0.3.13",
     "Pillow",
     "pypdfium2",
@@ -19,7 +21,8 @@ dev = [
     "pytest>=8.3.0",
     "pytest-asyncio>=0.24.0",
     "httpx>=0.27.0",
-    "ruff>=0.6.0",
+    "ruff==0.16.8",
+    "pyright==1.1.414",
 ]
 
 [tool.pytest.ini_options]
@@ -36,6 +39,7 @@ filterwarnings = [
 target-version = "py310"
 line-length = 100
 src = ["src", "tests"]
+extend-exclude = [".pytest_tmp"]
 
 [tool.ruff.lint]
 select = [

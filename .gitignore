@@ -23,7 +23,11 @@ uploads/
 *.sqlite3
 
 # Editores e IDEs
-.vscode/
+.vscode/*
+!.vscode/settings.json
 .idea/
 *.swp
 *.swo
+
+# Directorio temporal local de pytest
+.pytest_tmp/

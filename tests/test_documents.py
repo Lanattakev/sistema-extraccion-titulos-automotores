@@ -24,12 +24,15 @@ def client(monkeypatch, tmp_path):
         yield test_client
 
 
-@pytest.mark.parametrize("name,mime,content", [
-    ("titulo.pdf", "application/pdf", b"%PDF-1.4\nexample"),
-    ("foto.jpg", "image/jpeg", b"\xff\xd8\xffexample"),
-    ("foto.JPEG", "image/jpeg", b"\xff\xd8\xffexample"),
-    ("foto.png", "image/png", b"\x89PNG\r\n\x1a\nexample"),
-])
+@pytest.mark.parametrize(
+    "name,mime,content",
+    [
+        ("titulo.pdf", "application/pdf", b"%PDF-1.4\nexample"),
+        ("foto.jpg", "image/jpeg", b"\xff\xd8\xffexample"),
+        ("foto.JPEG", "image/jpeg", b"\xff\xd8\xffexample"),
+        ("foto.png", "image/png", b"\x89PNG\r\n\x1a\nexample"),
+    ],
+)
 def test_valid_upload(client, name, mime, content):
     response = client.post("/api/v1/documents", files={"file": (name, content, mime)})
     assert response.status_code == 201
@@ -44,8 +47,17 @@ def test_valid_upload(client, name, mime, content):
     assert json.loads(metadata.read_text(encoding="utf-8")) == data
 
 
-@pytest.mark.parametrize("name", ["script.exe", "../../archivo.pdf", "..\\..\\archivo.pdf",
-                                      "C:\\archivo.pdf", "/archivo.pdf", ""])
+@pytest.mark.parametrize(
+    "name",
+    [
+        "script.exe",
+        "../../archivo.pdf",
+        "..\\..\\archivo.pdf",
+        "C:\\archivo.pdf",
+        "/archivo.pdf",
+        "",
+    ],
+)
 def test_reject_invalid_names(client, name):
     response = client.post("/api/v1/documents", files={"file": (name, b"example")})
     assert response.status_code in (400, 422)
@@ -53,22 +65,26 @@ def test_reject_invalid_names(client, name):
 
 
 def test_reject_large_upload(client):
-    response = client.post("/api/v1/documents", files={
-        "file": ("titulo.pdf", b"x" * (storage.MAX_DOCUMENT_BYTES + 1))})
+    response = client.post(
+        "/api/v1/documents", files={"file": ("titulo.pdf", b"x" * (storage.MAX_DOCUMENT_BYTES + 1))}
+    )
     assert response.status_code == 413
     assert list(storage.UPLOAD_DIRECTORY.iterdir()) == []
 
 
 def test_unique_names(client):
-    results = [client.post("/api/v1/documents", files={
-        "file": ("titulo.pdf", b"example")}).json() for _ in range(2)]
+    results = [
+        client.post("/api/v1/documents", files={"file": ("titulo.pdf", b"example")}).json()
+        for _ in range(2)
+    ]
     assert results[0]["nombre_interno"] != results[1]["nombre_interno"]
     assert results[0]["id_documento"] != results[1]["id_documento"]
 
 
 def test_reject_multiple_files(client):
-    response = client.post("/api/v1/documents", files=[
-        ("file", ("uno.pdf", b"one")), ("file", ("dos.pdf", b"two"))])
+    response = client.post(
+        "/api/v1/documents", files=[("file", ("uno.pdf", b"one")), ("file", ("dos.pdf", b"two"))]
+    )
     assert response.status_code == 400
     assert not storage.UPLOAD_DIRECTORY.exists()
 
@@ -83,14 +99,18 @@ def make_pdf(text=None):
     writer = PdfWriter()
     page = writer.add_blank_page(width=300, height=300)
     if text is not None:
-        font = DictionaryObject({
-            NameObject("/Type"): NameObject("/Font"),
-            NameObject("/Subtype"): NameObject("/Type1"),
-            NameObject("/BaseFont"): NameObject("/Helvetica"),
-        })
-        page[NameObject("/Resources")] = DictionaryObject({
-            NameObject("/Font"): DictionaryObject({NameObject("/F1"): font}),
-        })
+        font = DictionaryObject(
+            {
+                NameObject("/Type"): NameObject("/Font"),
+                NameObject("/Subtype"): NameObject("/Type1"),
+                NameObject("/BaseFont"): NameObject("/Helvetica"),
+            }
+        )
+        page[NameObject("/Resources")] = DictionaryObject(
+            {
+                NameObject("/Font"): DictionaryObject({NameObject("/F1"): font}),
+            }
+        )
         stream = StreamObject()
         stream.set_data(f"BT /F1 12 Tf 20 200 Td ({text}) Tj ET".encode("ascii"))
         page[NameObject("/Contents")] = writer._add_object(stream)
@@ -176,26 +196,37 @@ def test_extract_fields_does_not_save_vehicle(client, monkeypatch):
     monkeypatch.setattr(SQLiteVehicleRepository, "save", forbidden_save)
     repository = client.app.state.vehicle_repository
     before_vehicles = repository.list_all()
-    document = upload_for_extraction(client, make_pdf(
-        "Dominio: AB123CD Marca: Ejemplo Modelo: Ruta Motor: M123 Chasis: C456 Anio: 2020"
-    ))
+    document = upload_for_extraction(
+        client,
+        make_pdf(
+            "Dominio: AB123CD Marca: Ejemplo Modelo: Ruta Motor: M123 Chasis: C456 Anio: 2020"
+        ),
+    )
     before_files = {p.name: p.read_bytes() for p in storage.UPLOAD_DIRECTORY.iterdir()}
     response = client.post(f"/api/v1/documents/{document['id_documento']}/extract-fields")
     assert response.status_code == 200
     assert response.json() == {
-        "id_documento": document["id_documento"], "patente": "AB123CD", "marca": "Ejemplo",
-        "modelo": "Ruta", "numero_motor": "M123", "numero_chasis": "C456",
-        "anio": 2020, "requiere_revision": True,
+        "id_documento": document["id_documento"],
+        "patente": "AB123CD",
+        "marca": "Ejemplo",
+        "modelo": "Ruta",
+        "numero_motor": "M123",
+        "numero_chasis": "C456",
+        "anio": 2020,
+        "requiere_revision": True,
     }
     assert repository.list_all() == before_vehicles
     assert {p.name: p.read_bytes() for p in storage.UPLOAD_DIRECTORY.iterdir()} == before_files
 
 
-@pytest.mark.parametrize("content,name,expected", [
-    (make_pdf(), "vacio.pdf", 200),
-    (b"invalid", "roto.pdf", 400),
-    (b"image", "foto.png", 400),
-])
+@pytest.mark.parametrize(
+    "content,name,expected",
+    [
+        (make_pdf(), "vacio.pdf", 200),
+        (b"invalid", "roto.pdf", 400),
+        (b"image", "foto.png", 400),
+    ],
+)
 def test_extract_fields_handles_unreadable_text(client, monkeypatch, content, name, expected):
     monkeypatch.setattr(ocr.pytesseract, "image_to_string", lambda *a, **kw: "")
     document = upload_for_extraction(client, content, name)
@@ -203,9 +234,17 @@ def test_extract_fields_handles_unreadable_text(client, monkeypatch, content, na
     assert response.status_code == expected
     if expected == 200:
         assert response.json()["requiere_revision"] is True
-        assert all(response.json()[field] is None for field in (
-            "patente", "marca", "modelo", "numero_motor", "numero_chasis", "anio",
-        ))
+        assert all(
+            response.json()[field] is None
+            for field in (
+                "patente",
+                "marca",
+                "modelo",
+                "numero_motor",
+                "numero_chasis",
+                "anio",
+            )
+        )
 
 
 def test_extract_fields_missing_document(client):
@@ -242,9 +281,15 @@ def test_extract_image_text(client, monkeypatch, name):
     assert response.json()["cantidad_caracteres"] == len(OCR_TEXT)
     assert response.json()["requiere_ocr"] is False
     settings = ocr.get_settings()
-    assert calls == [("PNG" if name.endswith(".png") else "JPEG", {
-        "lang": settings.TESSERACT_LANG, "timeout": settings.TESSERACT_TIMEOUT,
-    })]
+    assert calls == [
+        (
+            "PNG" if name.endswith(".png") else "JPEG",
+            {
+                "lang": settings.TESSERACT_LANG,
+                "timeout": settings.TESSERACT_TIMEOUT,
+            },
+        )
+    ]
     assert ocr.pytesseract.pytesseract.tesseract_cmd == settings.TESSERACT_CMD
 
 
@@ -261,9 +306,17 @@ def test_image_without_useful_text(client, monkeypatch, text):
     fields = client.post(base + "/extract-fields")
     assert fields.status_code == 200
     assert fields.json()["requiere_revision"] is True
-    assert all(fields.json()[field] is None for field in (
-        "patente", "marca", "modelo", "numero_motor", "numero_chasis", "anio",
-    ))
+    assert all(
+        fields.json()[field] is None
+        for field in (
+            "patente",
+            "marca",
+            "modelo",
+            "numero_motor",
+            "numero_chasis",
+            "anio",
+        )
+    )
 
 
 def test_extract_image_fields_does_not_save(client, monkeypatch):
@@ -280,9 +333,14 @@ def test_extract_image_fields_does_not_save(client, monkeypatch):
     response = client.post(f"/api/v1/documents/{document['id_documento']}/extract-fields")
     assert response.status_code == 200
     assert response.json() == {
-        "id_documento": document["id_documento"], "patente": "AB123CD", "marca": "TOYOTA",
-        "modelo": "COROLLA", "numero_motor": "XYZ123", "numero_chasis": "ABC987",
-        "anio": 2020, "requiere_revision": True,
+        "id_documento": document["id_documento"],
+        "patente": "AB123CD",
+        "marca": "TOYOTA",
+        "modelo": "COROLLA",
+        "numero_motor": "XYZ123",
+        "numero_chasis": "ABC987",
+        "anio": 2020,
+        "requiere_revision": True,
     }
     assert client.app.state.vehicle_repository.list_all() == before_vehicles
     assert {p.name: p.read_bytes() for p in storage.UPLOAD_DIRECTORY.iterdir()} == before_files
@@ -298,11 +356,14 @@ def test_extract_unsupported_format(client, monkeypatch, endpoint):
     assert response.status_code == 415
 
 
-@pytest.mark.parametrize("error", [
-    ocr.pytesseract.TesseractNotFoundError(),
-    ocr.pytesseract.TesseractError(1, "OCR failed"),
-    RuntimeError("Tesseract process timeout"),
-])
+@pytest.mark.parametrize(
+    "error",
+    [
+        ocr.pytesseract.TesseractNotFoundError(),
+        ocr.pytesseract.TesseractError(1, "OCR failed"),
+        RuntimeError("Tesseract process timeout"),
+    ],
+)
 def test_ocr_failure_is_controlled(client, monkeypatch, error):
     def fail_ocr(*args, **kwargs):
         raise error
@@ -334,9 +395,14 @@ def test_scanned_pdf_fallback(client, monkeypatch, endpoint):
         assert data["requiere_ocr"] is False
     else:
         assert data == {
-            "id_documento": document["id_documento"], "patente": "AB123CD", "marca": "TOYOTA",
-            "modelo": "COROLLA", "numero_motor": "XYZ123", "numero_chasis": "ABC987",
-            "anio": 2020, "requiere_revision": True,
+            "id_documento": document["id_documento"],
+            "patente": "AB123CD",
+            "marca": "TOYOTA",
+            "modelo": "COROLLA",
+            "numero_motor": "XYZ123",
+            "numero_chasis": "ABC987",
+            "anio": 2020,
+            "requiere_revision": True,
         }
     assert {p.name: p.read_bytes() for p in storage.UPLOAD_DIRECTORY.iterdir()} == before
 
@@ -387,19 +453,23 @@ def test_scanned_pdf_failure_is_controlled(client, monkeypatch, failure):
 
 
 @pytest.mark.parametrize("endpoint", ["extract-text", "extract-fields"])
-@pytest.mark.parametrize("auxiliary", [
-    "19/10/2026 titulo_impreso.pdf", "Dominio: ilegible", "Documento sin datos del vehiculo",
-])
+@pytest.mark.parametrize(
+    "auxiliary",
+    [
+        "19/10/2026 titulo_impreso.pdf",
+        "Dominio: ilegible",
+        "Documento sin datos del vehiculo",
+    ],
+)
 def test_auxiliary_text_with_scanned_page_uses_ocr(client, monkeypatch, endpoint, auxiliary):
     # PDF con una imagen real y una capa de texto auxiliar que pypdf puede leer.
     scanned = BytesIO()
     with Image.new("RGB", (100, 100), "white") as image:
         image.save(scanned, format="PDF")
     reader = PdfReader(BytesIO(scanned.getvalue()))
-    page = reader.pages[0]
-    page.merge_page(PdfReader(BytesIO(make_pdf(auxiliary))).pages[0])
     writer = PdfWriter()
-    writer.add_page(page)
+    page = writer.add_page(reader.pages[0])
+    page.merge_page(PdfReader(BytesIO(make_pdf(auxiliary))).pages[0])
     output = BytesIO()
     writer.write(output)
     assert auxiliary in PdfReader(BytesIO(output.getvalue())).pages[0].extract_text()
@@ -418,30 +488,42 @@ def test_auxiliary_text_with_scanned_page_uses_ocr(client, monkeypatch, endpoint
         assert response.json()["texto_extraido"] == OCR_TEXT
     else:
         assert response.json() == {
-            "id_documento": document["id_documento"], "patente": "AB123CD", "marca": "TOYOTA",
-            "modelo": "COROLLA", "numero_motor": "XYZ123", "numero_chasis": "ABC987",
-            "anio": 2020, "requiere_revision": True,
+            "id_documento": document["id_documento"],
+            "patente": "AB123CD",
+            "marca": "TOYOTA",
+            "modelo": "COROLLA",
+            "numero_motor": "XYZ123",
+            "numero_chasis": "ABC987",
+            "anio": 2020,
+            "requiere_revision": True,
         }
 
 
 @pytest.fixture
 def reviewed_fields():
     return {
-        "patente": " cd456ef ", "marca": "Honda", "modelo": "Civic",
-        "numero_motor": "motor2", "numero_chasis": "chasis2", "anio": 2022,
+        "patente": " cd456ef ",
+        "marca": "Honda",
+        "modelo": "Civic",
+        "numero_motor": "motor2",
+        "numero_chasis": "chasis2",
+        "anio": 2022,
     }
 
 
 def test_confirm_document_saves_reviewed_fields(client, reviewed_fields):
     document = upload_for_extraction(client, make_pdf("Marca: Ejemplo"), "titulo_original.pdf")
     response = client.post(
-        f"/api/v1/documents/{document['id_documento']}/confirm", json=reviewed_fields,
+        f"/api/v1/documents/{document['id_documento']}/confirm",
+        json=reviewed_fields,
     )
     assert response.status_code == 201
     intake = response.json()
     assert intake["archivo_origen"] == "titulo_original.pdf"
     assert intake["vehicle"] == {
-        **reviewed_fields, "patente": "CD456EF", "numero_motor": "MOTOR2",
+        **reviewed_fields,
+        "patente": "CD456EF",
+        "numero_motor": "MOTOR2",
         "numero_chasis": "CHASIS2",
     }
     assert intake["requiere_revision"] is False
@@ -483,11 +565,21 @@ def test_confirm_missing_document(client, reviewed_fields, document_id):
     assert client.get("/api/v1/vehicles").json() == []
 
 
-@pytest.mark.parametrize("field,value", [
-    ("patente", " "), ("marca", None), ("modelo", ""), ("numero_motor", " "),
-    ("numero_chasis", 42), ("anio", 0), ("anio", True), ("anio", "2020"),
-    ("archivo_origen", "fake.pdf"), ("requiere_revision", False),
-])
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("patente", " "),
+        ("marca", None),
+        ("modelo", ""),
+        ("numero_motor", " "),
+        ("numero_chasis", 42),
+        ("anio", 0),
+        ("anio", True),
+        ("anio", "2020"),
+        ("archivo_origen", "fake.pdf"),
+        ("requiere_revision", False),
+    ],
+)
 def test_confirm_invalid_fields_do_not_save(client, reviewed_fields, field, value):
     document = upload_for_extraction(client, make_pdf())
     response = client.post(
@@ -502,24 +594,28 @@ def test_confirm_requires_all_six_fields(client, reviewed_fields):
     document = upload_for_extraction(client, make_pdf())
     del reviewed_fields["anio"]
     response = client.post(
-        f"/api/v1/documents/{document['id_documento']}/confirm", json=reviewed_fields,
+        f"/api/v1/documents/{document['id_documento']}/confirm",
+        json=reviewed_fields,
     )
     assert response.status_code == 422
     assert client.get("/api/v1/vehicles").json() == []
 
 
 def post_batch(client, documents):
-    response = client.post("/api/v1/documents/batch", files=[
-        ("files", (name, content)) for name, content in documents
-    ])
+    response = client.post(
+        "/api/v1/documents/batch", files=[("files", (name, content)) for name, content in documents]
+    )
     assert response.status_code == 200
     return response.json()
 
 
-@pytest.mark.parametrize("names", [
-    ["uno.pdf", "dos.pdf", "tres.pdf"],
-    ["titulo.pdf", "foto.jpg", "foto.JPEG", "foto.png"],
-])
+@pytest.mark.parametrize(
+    "names",
+    [
+        ["uno.pdf", "dos.pdf", "tres.pdf"],
+        ["titulo.pdf", "foto.jpg", "foto.JPEG", "foto.png"],
+    ],
+)
 def test_batch_valid_documents(client, monkeypatch, names):
     calls = []
 
@@ -543,24 +639,30 @@ def test_batch_valid_documents(client, monkeypatch, names):
         assert item["error"] is None
         assert item["requiere_revision"] is True
         assert item["patente"] == "AB123CD"
-        proposal = client.post(
-            f"/api/v1/documents/{item['id_documento']}/extract-fields"
-        ).json()
+        proposal = client.post(f"/api/v1/documents/{item['id_documento']}/extract-fields").json()
         assert all(item[key] == value for key, value in proposal.items())
         assert storage.get_document(item["id_documento"]).nombre_original == item["nombre_original"]
 
 
-@pytest.mark.parametrize("name,content,stored", [
-    ("invalido.txt", b"texto", False),
-    ("roto.pdf", b"not a pdf", True),
-    ("vacio.png", b"", False),
-    ("grande.pdf", b"x" * (storage.MAX_DOCUMENT_BYTES + 1), False),
-], ids=["extension", "pdf-roto", "vacio", "demasiado-grande"])
+@pytest.mark.parametrize(
+    "name,content,stored",
+    [
+        ("invalido.txt", b"texto", False),
+        ("roto.pdf", b"not a pdf", True),
+        ("vacio.png", b"", False),
+        ("grande.pdf", b"x" * (storage.MAX_DOCUMENT_BYTES + 1), False),
+    ],
+    ids=["extension", "pdf-roto", "vacio", "demasiado-grande"],
+)
 def test_batch_failure_between_valid_documents(client, name, content, stored):
-    results = post_batch(client, [
-        ("uno.pdf", make_pdf("Dominio: AB123CD")), (name, content),
-        ("tres.pdf", make_pdf("Dominio: CD456EF")),
-    ])
+    results = post_batch(
+        client,
+        [
+            ("uno.pdf", make_pdf("Dominio: AB123CD")),
+            (name, content),
+            ("tres.pdf", make_pdf("Dominio: CD456EF")),
+        ],
+    )
     assert [item["fallo"] for item in results] == [False, True, False]
     assert results[0]["patente"] == "AB123CD"
     assert results[2]["patente"] == "CD456EF"
@@ -569,9 +671,17 @@ def test_batch_failure_between_valid_documents(client, name, content, stored):
     assert bool(failed["id_documento"]) is stored
     assert failed["error"]
     assert failed["requiere_revision"] is False
-    assert all(failed[field] is None for field in (
-        "patente", "marca", "modelo", "numero_motor", "numero_chasis", "anio",
-    ))
+    assert all(
+        failed[field] is None
+        for field in (
+            "patente",
+            "marca",
+            "modelo",
+            "numero_motor",
+            "numero_chasis",
+            "anio",
+        )
+    )
 
 
 def test_batch_scanned_pdf_and_ocr_failure(client, monkeypatch):
@@ -581,10 +691,14 @@ def test_batch_scanned_pdf_and_ocr_failure(client, monkeypatch):
         return OCR_TEXT
 
     monkeypatch.setattr(ocr.pytesseract, "image_to_string", fake_ocr)
-    results = post_batch(client, [
-        ("escaneado.pdf", make_pdf()), ("foto.png", make_image("foto.png")),
-        ("texto.pdf", make_pdf("Dominio: CD456EF")),
-    ])
+    results = post_batch(
+        client,
+        [
+            ("escaneado.pdf", make_pdf()),
+            ("foto.png", make_image("foto.png")),
+            ("texto.pdf", make_pdf("Dominio: CD456EF")),
+        ],
+    )
     assert [item["fallo"] for item in results] == [False, True, False]
     assert results[0]["numero_motor"] == "XYZ123"
     assert "No se pudo realizar OCR" in results[1]["error"]
@@ -598,13 +712,17 @@ def test_batch_does_not_save_until_confirmation(client, monkeypatch, reviewed_fi
 
     with monkeypatch.context() as patch:
         patch.setattr(SQLiteVehicleRepository, "save", forbidden_save)
-        results = post_batch(client, [
-            ("uno.pdf", make_pdf("Dominio: AB123CD")),
-            ("dos.pdf", make_pdf("Dominio: CD456EF")),
-        ])
+        results = post_batch(
+            client,
+            [
+                ("uno.pdf", make_pdf("Dominio: AB123CD")),
+                ("dos.pdf", make_pdf("Dominio: CD456EF")),
+            ],
+        )
         assert client.get("/api/v1/vehicles").json() == []
     response = client.post(
-        f"/api/v1/documents/{results[0]['id_documento']}/confirm", json=reviewed_fields,
+        f"/api/v1/documents/{results[0]['id_documento']}/confirm",
+        json=reviewed_fields,
     )
     assert response.status_code == 201
     assert len(client.get("/api/v1/vehicles").json()) == 1

@@ -1,0 +1,16 @@
+{
+  "include": [
+    "src"
+  ],
+  "exclude": [
+    ".venv",
+    "frontend",
+    "tests",
+    ".pytest_tmp"
+  ],
+  "typeCheckingMode": "strict",
+  "pythonVersion": "3.10",
+  "venvPath": ".",
+  "venv": ".venv",
+  "stubPath": "typings"
+}

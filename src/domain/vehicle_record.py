@@ -28,8 +28,7 @@ class VehicleRecord:
                 valor = valor.upper()
             setattr(self, campo, valor)
 
-        if isinstance(self.anio, bool) or not isinstance(self.anio, int) or self.anio <= 0:
-            raise ValueError("anio debe ser un entero mayor que 0.")
+        self.anio = validate_year(self.anio)
 
 
 @dataclass
@@ -44,8 +43,20 @@ class VehicleIntake:
     numero_registro: int | None = None
 
     def __post_init__(self) -> None:
-        if not isinstance(self.archivo_origen, str):
-            raise ValueError("archivo_origen debe ser texto.")
-        self.archivo_origen = self.archivo_origen.strip().replace("\\", "/").rsplit("/", 1)[-1].strip()
-        if not self.archivo_origen:
-            raise ValueError("archivo_origen no puede quedar vacio.")
+        self.archivo_origen = normalize_source_filename(self.archivo_origen)
+
+
+def validate_year(value: object) -> int:
+    """Valida entradas de Python incluso cuando no respetan las anotaciones."""
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise ValueError("anio debe ser un entero mayor que 0.")
+    return value
+
+
+def normalize_source_filename(value: object) -> str:
+    if not isinstance(value, str):
+        raise ValueError("archivo_origen debe ser texto.")
+    name = value.strip().replace("\\", "/").rsplit("/", 1)[-1].strip()
+    if not name:
+        raise ValueError("archivo_origen no puede quedar vacio.")
+    return name
