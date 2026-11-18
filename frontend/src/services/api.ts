@@ -3,6 +3,11 @@ import type { HistoryEvent } from '../types/history'
 import type { ReviewedVehicle, VehicleIntake } from '../types/vehicles'
 
 const API_BASE_URL = 'http://127.0.0.1:8000/api/v1'
+
+export function documentContentUrl(documentId: string): string {
+  return `${API_BASE_URL}/documents/${encodeURIComponent(documentId)}/content`
+}
+
 const textFields = [
   'id_documento', 'nombre_original', 'patente', 'marca', 'modelo',
   'numero_motor', 'numero_chasis', 'error',
