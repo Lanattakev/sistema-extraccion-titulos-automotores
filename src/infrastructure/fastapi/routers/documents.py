@@ -3,6 +3,7 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import FileResponse
 from starlette.concurrency import run_in_threadpool
 
 from src.application.dtos.document_dtos import (
@@ -24,6 +25,7 @@ from src.application.use_cases.document_workflow import (
 from src.application.use_cases.process_batch_documents import ProcessBatchDocumentsUseCase
 from src.domain.document_record import DocumentRecord
 from src.domain.vehicle_record import VehicleIntake
+from src.infrastructure.fastapi.document_content import document_content_response
 from src.infrastructure.fastapi.document_dependencies import (
     Repository as DocumentRepository,
 )
@@ -50,6 +52,11 @@ router = APIRouter(prefix="/documents", tags=["Documents"], route_class=Document
 @router.get("", response_model=list[DocumentRecord])
 def list_documents(repository: DocumentRepository) -> list[DocumentRecord]:
     return repository.list_all()
+
+
+@router.get("/{id_documento}/content", response_class=FileResponse)
+def get_document_content(id_documento: str) -> FileResponse:
+    return document_content_response(id_documento)
 
 
 @router.patch("/{id_documento}/review", response_model=DocumentRecord)
