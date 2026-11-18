@@ -24,12 +24,17 @@ python -m uvicorn src.main:app --reload --host 127.0.0.1 --port 8000
 - `App.tsx`: navegación local en estado React y coordinación de consultas compartidas.
 - `views/`: Inicio, Carga, Vehículos, Métricas, Historial, Configuración y Ayuda.
 - `components/`: carga de archivos, edición de seis campos, tablas y gráficos.
+- `DocumentPreview`: original persistido junto al formulario, PDF embebido o imagen con zoom y desplazamiento; enlace alternativo al original.
 - `hooks/`: carga de vehículos/historial y control de revisión/confirmación individual y múltiple.
 - `services/api.ts` y `types/`: llamadas HTTP, validación de respuestas y contratos TypeScript.
 - `utils/`: búsqueda, prioridades, CSV y métricas desde documentos, vehículos e historial reales.
 - `tests/`: pruebas con `node:test`, TypeScript y simulaciones; no requieren otro runner.
 
 Carga envía archivos a `/documents/batch`, muestra fallos por archivo, permite corregir los seis campos y guarda la revisión con PATCH antes de confirmar. La confirmación múltiple omite pendientes y éxitos previos. Documentos, vehículos e historial se recuperan de la API; las respuestas antiguas no deben pisar revisiones recientes. Las métricas muestran errores y estados vacíos sin inventar valores. CSV exporta el listado de vehículos recibido.
+
+El visor usa la URL canónica `documentContentUrl` de `services/api.ts`, basada en `/documents/ID/content`; no depende de objetos File ni URLs temporales locales. El original aparece a la izquierda y el formulario a la derecha, apilados en pantallas pequeñas. Las imágenes permiten zoom de 50% a 250% y desplazamiento con barras, teclado o gesto táctil. Los PDF usan el visor del navegador; si no está disponible, se puede abrir el original en otra pestaña. Los errores de carga que notifica el navegador ofrecen reintento; el iframe PDF puede mostrar por sí mismo una respuesta de error del servidor.
+
+En el formulario, `Ctrl + Enter` confirma solo un documento con revisión guardada; no marca pendientes como revisados. `Esc` cierra si no hay una operación en curso. Los botones declaran los atajos y conservan los bloqueos de confirmación, edición, lote y doble envío. No se interceptan eventos dentro del visor PDF del navegador.
 
 El tema claro/oscuro dura durante la sesión. Configuración incluye opciones de demostración y notificaciones deshabilitadas; no administra usuarios, permisos ni servicios de notificación.
 
@@ -42,6 +47,6 @@ npm run build
 npm run preview -- --host 127.0.0.1
 ```
 
-`npm test` ejecuta `node --test tests/*.test.mjs`; la suite actual contiene 78 tests. Incluye cliente HTTP, control de revisiones, renderizado, métricas, búsquedas y CSV con simulaciones. No equivale a una prueba integral en navegador ni mide precisión del OCR. El build ejecuta TypeScript y Vite; `preview` sirve el resultado para evaluación local. Desde Bash en la raíz también se puede usar `bash run.sh frontend-test` tras `npm ci`.
+`npm test` ejecuta `node --test tests/*.test.mjs`; la suite actual contiene 97 tests. Incluye cliente HTTP, control de revisiones, visor PDF/imagen, zoom, atajos, accesibilidad semántica, renderizado, métricas, búsquedas y CSV con simulaciones. No equivale a una prueba integral en navegador ni mide precisión del OCR. El build ejecuta TypeScript y Vite; `preview` sirve el resultado para evaluación local. Desde Bash en la raíz también se puede usar `bash run.sh frontend-test` tras `npm ci`.
 
 Usar documentos sintéticos. La API no tiene autenticación/autorización; mantener la evaluación en localhost. No publicar documentos, metadatos, bases de datos ni secretos.

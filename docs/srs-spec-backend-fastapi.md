@@ -1,9 +1,9 @@
 # SRS-SPECS: Sistema de extracción de títulos automotores — Single Source of Truth (SSOT) & Especificación del Sistema
 
 > **Documento:** `srs-spec-backend-fastapi.md`
-> **Versión:** `2.0.0`
-> **Estado:** `En revisión mediante el PR del issue #6`
-> **Fecha:** `2026-11-12`
+> **Versión:** `2.1.0`
+> **Estado:** `En revisión mediante el PR del issue #12`
+> **Fecha:** `2026-11-18`
 > **Autor(es):** `Kevin Lanatta; desarrollo asistido bajo revisión humana`
 > **Repositorio / Módulo:** `Lanattakev/sistema-extraccion-titulos-automotores`
 
@@ -94,6 +94,8 @@ Se proponen patente, marca, modelo, número de motor, número de chasis y año. 
 GET `/api/v1/documents` recupera estados persistidos. PATCH `/api/v1/documents/ID_DOCUMENTO/review` valida los seis campos completos y guarda estado revisado. Repetir una revisión idéntica no duplica el evento; editar campos requiere volver a guardar. POST `/api/v1/documents/ID_DOCUMENTO/confirm` crea un `VehicleIntake` con HTTP 201, UUID interno, número de registro positivo, fecha de ingreso, nombre original como `archivo_origen` y `requiere_revision=false`. El nombre de origen lo obtiene el servidor; no se admite como corrección del usuario. La confirmación no ejecuta OCR de nuevo.
 
 La transacción SQLite engloba ingreso, cambio a registrado y evento de historial. Documento registrado devuelve 409 ante nueva revisión/confirmación; si los campos enviados difieren de una revisión guardada, confirmar devuelve 409. Inexistente devuelve 404 y datos inválidos, 422. Por compatibilidad, la API acepta confirmar un pendiente enviando explícitamente sus seis campos completos; la SPA exige guardar revisión y su confirmación múltiple omite pendientes, continúa tras fallos y no reenvía éxitos.
+
+GET `/api/v1/documents/ID_DOCUMENTO/content` sirve el original inline con MIME PDF/JPEG/PNG, soporte de rangos y 404 ante metadatos u original inexistentes. La ruta validada permanece dentro de uploads; visualizar no ejecuta extracción ni cambia SQLite, estados o historial. El visor de la SPA muestra original y formulario lado a lado, apilados en pantallas pequeñas. Imágenes con zoom y desplazamiento; PDF con controles del navegador y enlace alternativo. Ctrl + Enter confirma solo una revisión guardada; Esc cierra cuando no hay operaciones pendientes. Los atajos no anulan la revisión humana ni los bloqueos de duplicados.
 
 POST `/api/v1/vehicles` conserva el alta independiente: recibe los seis campos y `archivo_origen`, sin verificar una carga, y crea un ingreso con `requiere_revision=true`. GET `/api/v1/vehicles` y `/api/v1/vehicles/ID_VEHICULO` consultan ingresos.
 
@@ -216,7 +218,7 @@ python -X utf8 -m pytest -q
 
 Para hooks: instalar `python -m pip install pre-commit` y ejecutar `python -m pre_commit run --all-files` con el entorno activado, de modo que los hooks locales usen su Python. Los hooks pueden modificar archivos; revisar el diff y repetir verificaciones antes de crear/publicar el commit definitivo. En un entorno que no permita escribir la caché pytest puede ejecutarse con `-p no:cacheprovider`, sin excluir pruebas.
 
-Desde `frontend/`, ejecutar `npm ci`, `npm test`, `npm run lint` y `npm run build`. Desde Bash en la raíz, `bash run.sh frontend-test` invoca la suite frontend sin crear un entorno Python. `npm run preview -- --host 127.0.0.1` permite evaluar el build. Las pruebas Node existentes son 78 al elaborar esta revisión; no agregar pruebas artificiales para alcanzar el conteo histórico de 41 mencionado en #6.
+Desde `frontend/`, ejecutar `npm ci`, `npm test`, `npm run lint` y `npm run build`. Desde Bash en la raíz, `bash run.sh frontend-test` invoca la suite frontend sin crear un entorno Python. `npm run preview -- --host 127.0.0.1` permite evaluar el build. Las pruebas Node existentes son 97 tras incorporar el visor de #12; el conteo de 41 mencionado en #6 es histórico y no justifica agregar pruebas artificiales.
 
 CI de backend está en `.github/workflows/quality.yml` y se ejecuta en PR y push a main con la matriz indicada en NFR-06. Actualmente no ejecuta frontend: sus pruebas/lint/build se verifican localmente y se informan en el PR. La advertencia conocida de Starlette/HTTPX no se oculta ni se considera prueba de fallo funcional.
 

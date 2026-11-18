@@ -83,6 +83,8 @@ El cliente tiene la base `http://127.0.0.1:8000/api/v1` definida en `frontend/sr
 
 Para usar el flujo: cargar archivos, procesar el lote, revisar/corregir los seis campos, guardar la revisión y confirmar. La SPA recupera los estados persistidos al volver a abrirse y bloquea confirmaciones duplicadas. La API mantiene la confirmación directa compatible de un pendiente con seis campos revisados explícitamente.
 
+La revisión muestra el original junto a los seis campos y se apila en pantallas pequeñas. Recupera el archivo por UUID desde el servidor, incluso tras recargar o vaciar la selección local. Las imágenes tienen zoom de 50% a 250% y un área desplazable por teclado o gesto táctil; los PDF usan los controles del visor del navegador y ofrecen un enlace al original como alternativa. En el formulario, `Ctrl + Enter` confirma solo una revisión guardada y `Esc` cierra cuando no hay una operación en curso. Los atajos conservan los bloqueos y la protección contra duplicados.
+
 ```bash
 npm test
 npm run lint
@@ -90,7 +92,7 @@ npm run build
 npm run preview -- --host 127.0.0.1
 ```
 
-`npm test` ejecuta `node --test tests/*.test.mjs`: actualmente son 78 tests de lógica, cliente HTTP, controladores y renderizado con simulaciones; no son pruebas de navegador ni OCR real. `preview` requiere el build y sirve para evaluarlo localmente. Desde Bash en la raíz, `bash run.sh frontend-test` ejecuta la misma suite sin crear un entorno Python. Más detalles en [frontend/README.md](frontend/README.md).
+`npm test` ejecuta `node --test tests/*.test.mjs`: actualmente son 97 tests de lógica, cliente HTTP, controladores, visor y renderizado con simulaciones; no son pruebas de navegador ni OCR real. `preview` requiere el build y sirve para evaluarlo localmente. Desde Bash en la raíz, `bash run.sh frontend-test` ejecuta la misma suite sin crear un entorno Python. Más detalles en [frontend/README.md](frontend/README.md).
 
 ## Uso por Swagger
 
@@ -98,6 +100,7 @@ npm run preview -- --host 127.0.0.1
 | --- | --- |
 | `POST /api/v1/documents` | Cargar un documento en el campo multipart `file` |
 | `GET /api/v1/documents` | Recuperar documentos y sus estados persistidos |
+| `GET /api/v1/documents/{id_documento}/content` | Visualizar el original PDF/JPEG/PNG inline; admite rangos y devuelve 404 si faltan metadatos u original |
 | `PATCH /api/v1/documents/{id_documento}/review` | Guardar los seis campos revisados |
 | `POST /api/v1/documents/batch` | Cargar y extraer un lote sin confirmar ingresos |
 | `POST /api/v1/documents/{id_documento}/extract-text` | Extraer texto de PDF con pypdf primero y fallback OCR, o de JPG/JPEG/PNG con OCR local |
@@ -174,6 +177,8 @@ El [SRS canónico](docs/srs-spec-backend-fastapi.md) describe requisitos, arquit
 Usar documentos sintéticos para desarrollo, pruebas y ejemplos. No publicar títulos reales, datos personales, uploads, metadatos, bases SQLite ni secretos. `.gitignore` excluye `uploads/`, `*.db`, `*.sqlite3`, `.env` y `.env.*`, salvo `.env.example`.
 
 Los UUID evitan usar el nombre original como ruta, pero los metadatos conservan ese nombre. La carga valida extensión y tamaño; no incorpora análisis antivirus ni certifica el contenido por su extensión. La API actual carece de autenticación y autorización; su configuración predeterminada de CORS es permisiva. Mantener la ejecución de evaluación en localhost. No se declara cifrado de archivos o SQLite, política automatizada de retención ni preparación para producción.
+
+El endpoint `content` sirve el original sin ejecutar PDF/OCR ni modificar SQLite, estados o historial. Valida el UUID y la ruta dentro de uploads, deriva el MIME de la extensión admitida y envía `Content-Disposition: inline`, `Cache-Control: no-store` y `X-Content-Type-Options: nosniff`. No agrega autenticación al servicio; necesita los mismos controles de acceso pendientes antes de habilitar uso compartido.
 
 ## Procesamiento por lote
 
