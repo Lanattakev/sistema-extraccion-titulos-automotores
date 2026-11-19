@@ -10,12 +10,12 @@ from PIL import Image
 from src.application.document_errors import InvalidDocument
 from src.application.dtos.document_dtos import Document, ExtractedText
 from src.application.text_extraction import TextExtractor
-from src.infrastructure.settings.config import get_settings
+from src.infrastructure.settings.config import Settings, get_settings
 
 
-def recognize_image_text(image: Image.Image) -> str:
+def recognize_image_text(image: Image.Image, *, settings: Settings | None = None) -> str:
     """OCR compartido por imagenes y paginas PDF; conserva configuracion y timeout."""
-    settings = get_settings()
+    settings = settings if settings is not None else get_settings()
     pytesseract.pytesseract.tesseract_cmd = settings.TESSERACT_CMD
     text = pytesseract.image_to_string(
         image,

@@ -4,6 +4,10 @@ Aplicación local con backend FastAPI y SPA React 19 para cargar títulos automo
 
 ## Estado del MVP
 
+Los lotes usan procesos CPU configurables con orden estable, admisión acotada y
+fallback secuencial ante fallos del pool. Consultar [procesamiento paralelo](docs/parallel-batches.md)
+para configuración, límites de memoria, pruebas y benchmark con OCR real.
+
 SQLite usa WAL y un pool compartido durante el ciclo de vida de FastAPI
 (`SQLITE_POOL_SIZE=4`). **El motor debe ser >= 3.51.3 o un backport corregido**;
 el arranque rechaza motores afectados por WAL-reset antes de abrir la base.
@@ -252,8 +256,8 @@ con las implementaciones actuales y `document_http.py` traduce los errores a los
 mismos estados HTTP 400/404/409/413/415/422. Los endpoints no coordinan persistencia
 ni seleccionan motores de extraccion y no superan 20 lineas.
 
-El lote procesa un archivo por vez, en orden, ejecutando el trabajo bloqueante
-fuera del event loop mediante `asyncio.to_thread`. Cada fallo se devuelve por archivo
+El lote procesa archivos en paralelo mediante un pool spawn compartido, con orden
+de respuesta estable, límites de CPU/memoria y fallback secuencial. Cada fallo se devuelve por archivo
 y permite continuar; conserva el ID si el archivo se almaceno antes del error de
 extraccion. Una extraccion fallida no agrega un pendiente a SQLite, como antes.
 La API individual mantiene el registro pendiente despues de una carga correcta.

@@ -11,7 +11,8 @@ try:
     from fastapi.testclient import TestClient
     from httpx import ASGITransport, AsyncClient
 
-    from src.main import app
+    from src.infrastructure.settings.config import get_settings
+    from src.main import app, create_app
 
     HAS_FASTAPI_TEST_DEPS = True
 except ImportError:
@@ -19,10 +20,11 @@ except ImportError:
 
 
 @pytest.fixture
-def sync_client() -> Generator[Any, None, None]:
+def sync_client(monkeypatch: Any, tmp_path: Any) -> Generator[Any, None, None]:
     if not HAS_FASTAPI_TEST_DEPS:
         pytest.skip("Dependencias de testing FastAPI no instaladas.")
-    with TestClient(app) as client:
+    monkeypatch.setattr(get_settings(), "DATABASE_URL", f"sqlite:///{tmp_path / 'health.db'}")
+    with TestClient(create_app()) as client:
         yield client
 
 

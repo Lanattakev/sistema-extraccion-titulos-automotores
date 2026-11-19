@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager, closing
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from src.infrastructure.batch_processing import BatchDocumentProcessor
 from src.infrastructure.fastapi.routers.documents import router as documents_router
 from src.infrastructure.fastapi.routers.history import router as history_router
 from src.infrastructure.fastapi.routers.vehicles import router as vehicles_router
@@ -32,9 +33,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         app.state.vehicle_repository = SQLiteVehicleRepository(database_path, pool=pool)
         app.state.document_repository = SQLiteDocumentRepository(database_path, pool=pool)
         app.state.history_repository = app.state.document_repository.history_repository
+        app.state.batch_processor = BatchDocumentProcessor(settings)
         try:
             yield
         finally:
+            await app.state.batch_processor.close()
             logger.info("Cerrando recursos y conexiones de la aplicación...")
 
 

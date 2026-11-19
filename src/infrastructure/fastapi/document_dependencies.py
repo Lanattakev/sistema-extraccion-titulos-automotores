@@ -4,6 +4,8 @@ from typing import Annotated
 
 from fastapi import Depends, Request
 
+from src.application.dtos.document_dtos import Document, ProposedVehicleFields
+from src.application.title_field_extraction import extract_title_fields
 from src.application.use_cases.document_extraction import (
     ExtractDocumentFieldsUseCase,
     ExtractDocumentTextUseCase,
@@ -15,6 +17,7 @@ from src.application.use_cases.document_workflow import (
 )
 from src.application.use_cases.process_batch_documents import ProcessBatchDocumentsUseCase
 from src.domain.repositories import DocumentRepository
+from src.infrastructure.batch_processing import BatchDocumentProcessor
 from src.infrastructure.document_processing import read_document_text
 from src.infrastructure.persistence import local_document_storage as storage
 
@@ -50,6 +53,20 @@ def get_confirm_use_case(repository: Repository) -> ConfirmDocumentUseCase:
 
 
 def get_batch_use_case(
+    request: Request,
     fields: Annotated[ExtractDocumentFieldsUseCase, Depends(get_fields_use_case)],
 ) -> ProcessBatchDocumentsUseCase:
-    return ProcessBatchDocumentsUseCase(storage.save_document, fields.execute)
+    processor: BatchDocumentProcessor = request.app.state.batch_processor
+
+    async def process_saved(document: Document) -> ProposedVehicleFields:
+        text = await processor.extract(document, storage.UPLOAD_DIRECTORY / document.nombre_interno)
+        # La persistencia se realiza luego, por indice, en el caso de uso del lote.
+        return extract_title_fields(document.id_documento, text.texto_extraido)
+
+    return ProcessBatchDocumentsUseCase(
+        storage.save_document,
+        fields.execute,
+        process_saved=process_saved,
+        parallelism=processor.max_workers,
+        save_pending=fields.repository.save_pending,
+    )

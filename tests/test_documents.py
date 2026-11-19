@@ -20,6 +20,8 @@ from src.main import create_app
 def client(monkeypatch, tmp_path):
     monkeypatch.setattr(storage, "UPLOAD_DIRECTORY", tmp_path / "uploads")
     monkeypatch.setattr(get_settings(), "DATABASE_URL", f"sqlite:///{tmp_path / 'vehicles.db'}")
+    # Los mocks OCR viven en este proceso; spawn se cubre con integracion real separada.
+    monkeypatch.setattr(get_settings(), "BATCH_MAX_WORKERS", 1)
     with TestClient(create_app()) as test_client:
         yield test_client
 

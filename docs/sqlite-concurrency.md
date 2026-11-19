@@ -87,7 +87,7 @@ Python original de `.venv/Scripts`.
   no equivale a durabilidad `FULL`. Backups/restauración, checkpoints operativos y
   carga sostenida requieren validación independiente.
 - No cambia API/OpenAPI, UUID, numeración, estados, MIME, visor ni extracción.
-  No implementa paralelismo interno de lotes (#14), confianza OCR (#15), controles
+  El paralelismo de lotes se documenta en [issue #14](parallel-batches.md); no agrega confianza OCR (#15), controles
   adicionales de producción ni certificación de producción.
 
 `tests/integration/test_sqlite_concurrency.py` comprueba pragmas, reutilización,
