@@ -1,7 +1,6 @@
 """src/infrastructure/persistence/sqlite_document_repository.py"""
 
 import sqlite3
-from contextlib import closing
 from dataclasses import asdict
 from pathlib import Path
 
@@ -16,14 +15,20 @@ from src.domain.repositories import (
     DocumentRepository,
 )
 from src.domain.vehicle_record import VehicleIntake, VehicleRecord
+from src.infrastructure.persistence.sqlite_connections import (
+    SQLiteConnectionPool,
+    sqlite_connection,
+)
 from src.infrastructure.persistence.sqlite_history_repository import SQLiteHistoryRepository
 from src.infrastructure.persistence.sqlite_vehicle_repository import SQLiteVehicleRepository
 
 
 class SQLiteDocumentRepository(DocumentRepository):
-    def __init__(self, db_path: str | Path) -> None:
+    def __init__(self, db_path: str | Path, *, pool: SQLiteConnectionPool | None = None) -> None:
         self._db_path = str(db_path)
-        with closing(self._connect()) as connection, connection:
+        self._pool = pool
+        with sqlite_connection(self._db_path, self._pool) as connection:
+            connection.execute("BEGIN IMMEDIATE")
             connection.execute("""
                 CREATE TABLE IF NOT EXISTS documents (
                     id_documento TEXT PRIMARY KEY NOT NULL,
@@ -42,13 +47,7 @@ class SQLiteDocumentRepository(DocumentRepository):
                 )
             """)
 
-        self.history_repository = SQLiteHistoryRepository(db_path)
-
-    def _connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(self._db_path, timeout=30)
-        connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA foreign_keys = ON")
-        return connection
+        self.history_repository = SQLiteHistoryRepository(db_path, pool=pool)
 
     def save_pending(self, document: DocumentRecord) -> None:
         """La extraccion solo actualiza pendientes; nunca pisa una revision humana."""
@@ -60,7 +59,7 @@ class SQLiteDocumentRepository(DocumentRepository):
             for key in fields
             if key not in ("id_documento", "estado", "id_interno")
         )
-        with closing(self._connect()) as connection, connection:
+        with sqlite_connection(self._db_path, self._pool) as connection:
             connection.execute("BEGIN IMMEDIATE")
             is_new = (
                 connection.execute(
@@ -84,7 +83,7 @@ class SQLiteDocumentRepository(DocumentRepository):
                 )
 
     def list_all(self) -> list[DocumentRecord]:
-        with closing(self._connect()) as connection:
+        with sqlite_connection(self._db_path, self._pool) as connection:
             rows = connection.execute("SELECT * FROM documents ORDER BY rowid").fetchall()
         return [DocumentRecord(**dict(row)) for row in rows]
 
@@ -116,7 +115,7 @@ class SQLiteDocumentRepository(DocumentRepository):
         )
 
     def review(self, document_id: str, vehicle: VehicleRecord) -> DocumentRecord:
-        with closing(self._connect()) as connection, connection:
+        with sqlite_connection(self._db_path, self._pool) as connection:
             connection.execute("BEGIN IMMEDIATE")
             document = self._get(connection, document_id)
             if document.estado == "registrado":
@@ -134,7 +133,7 @@ class SQLiteDocumentRepository(DocumentRepository):
             return self._get(connection, document_id)
 
     def confirm(self, document_id: str, vehicle: VehicleRecord) -> VehicleIntake:
-        with closing(self._connect()) as connection, connection:
+        with sqlite_connection(self._db_path, self._pool) as connection:
             # El bloqueo se obtiene ANTES de leer el estado y se mantiene hasta el commit.
             connection.execute("BEGIN IMMEDIATE")
             document = self._get(connection, document_id)

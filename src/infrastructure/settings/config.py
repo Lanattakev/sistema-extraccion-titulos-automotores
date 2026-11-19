@@ -41,6 +41,7 @@ class Settings(BaseSettings):
 
     # Base de Datos
     DATABASE_URL: str = Field(default="sqlite+aiosqlite:///./app.db")
+    SQLITE_POOL_SIZE: int = Field(default=4, gt=0)
 
     # OCR local
     TESSERACT_CMD: str = Field(default_factory=default_tesseract_command)

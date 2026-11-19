@@ -1,39 +1,42 @@
 """src/infrastructure/persistence/sqlite_vehicle_repository.py"""
 
 import sqlite3
-from contextlib import closing
 from datetime import datetime
 from pathlib import Path
 
 from src.domain.repositories import VehicleRepository
 from src.domain.vehicle_record import VehicleIntake, VehicleRecord
+from src.infrastructure.persistence.sqlite_connections import (
+    SQLiteConnectionPool,
+    sqlite_connection,
+)
 
 
 class SQLiteVehicleRepository(VehicleRepository):
     """Guarda y recupera ingresos completos en una base SQLite local."""
 
-    def __init__(self, db_path: str | Path) -> None:
+    def __init__(self, db_path: str | Path, *, pool: SQLiteConnectionPool | None = None) -> None:
         self._db_path = str(db_path)
-        with closing(sqlite3.connect(self._db_path)) as connection:
-            with connection:
-                connection.execute("BEGIN IMMEDIATE")
-                connection.execute(
-                    """
-                    CREATE TABLE IF NOT EXISTS vehicle_intakes (
-                        id_interno TEXT PRIMARY KEY NOT NULL,
-                        fecha_ingreso TEXT NOT NULL,
-                        archivo_origen TEXT NOT NULL,
-                        requiere_revision INTEGER NOT NULL CHECK (requiere_revision IN (0, 1)),
-                        patente TEXT NOT NULL,
-                        marca TEXT NOT NULL,
-                        modelo TEXT NOT NULL,
-                        numero_motor TEXT NOT NULL,
-                        numero_chasis TEXT NOT NULL,
-                        anio INTEGER NOT NULL
-                    )
-                    """
+        self._pool = pool
+        with sqlite_connection(self._db_path, self._pool) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS vehicle_intakes (
+                    id_interno TEXT PRIMARY KEY NOT NULL,
+                    fecha_ingreso TEXT NOT NULL,
+                    archivo_origen TEXT NOT NULL,
+                    requiere_revision INTEGER NOT NULL CHECK (requiere_revision IN (0, 1)),
+                    patente TEXT NOT NULL,
+                    marca TEXT NOT NULL,
+                    modelo TEXT NOT NULL,
+                    numero_motor TEXT NOT NULL,
+                    numero_chasis TEXT NOT NULL,
+                    anio INTEGER NOT NULL
                 )
-                self._migrate_registration_numbers(connection)
+                """
+            )
+            self._migrate_registration_numbers(connection)
 
     @staticmethod
     def _migrate_registration_numbers(connection: sqlite3.Connection) -> None:
@@ -96,9 +99,9 @@ class SQLiteVehicleRepository(VehicleRepository):
 
     def save(self, intake: VehicleIntake) -> None:
         """Inserta un ingreso; un ID repetido produce sqlite3.IntegrityError."""
-        with closing(sqlite3.connect(self._db_path)) as connection:
-            with connection:
-                self.insert_in_transaction(connection, intake)
+        with sqlite_connection(self._db_path, self._pool) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            self.insert_in_transaction(connection, intake)
 
     @staticmethod
     def insert_in_transaction(connection: sqlite3.Connection, intake: VehicleIntake) -> None:
@@ -130,8 +133,7 @@ class SQLiteVehicleRepository(VehicleRepository):
 
     def get_by_id(self, id_interno: str) -> VehicleIntake | None:
         """Recupera un ingreso o devuelve None si el ID no existe."""
-        with closing(sqlite3.connect(self._db_path)) as connection:
-            connection.row_factory = sqlite3.Row
+        with sqlite_connection(self._db_path, self._pool) as connection:
             row = connection.execute(
                 "SELECT * FROM vehicle_intakes WHERE id_interno = ?", (id_interno,)
             ).fetchone()
@@ -139,8 +141,7 @@ class SQLiteVehicleRepository(VehicleRepository):
 
     def list_all(self) -> list[VehicleIntake]:
         """Lista los ingresos en orden de insercion."""
-        with closing(sqlite3.connect(self._db_path)) as connection:
-            connection.row_factory = sqlite3.Row
+        with sqlite_connection(self._db_path, self._pool) as connection:
             rows = connection.execute("SELECT * FROM vehicle_intakes ORDER BY rowid").fetchall()
         return [self._from_row(row) for row in rows]
 

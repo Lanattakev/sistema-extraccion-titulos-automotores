@@ -38,6 +38,30 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python }}
+      # WAL-reset exige un motor corregido; no basta con actualizar el modulo pip.
+      - name: Prepare fixed SQLite on Linux
+        if: runner.os == 'Linux'
+        run: |
+          curl --fail --location --retry 3 https://sqlite.org/2026/sqlite-autoconf-3540100.tar.gz -o "$RUNNER_TEMP/sqlite.tar.gz"
+          python -c "import hashlib, pathlib; p=pathlib.Path(r'$RUNNER_TEMP/sqlite.tar.gz'); assert hashlib.sha3_256(p.read_bytes()).hexdigest() == 'b6ced585c750916b1052667239a12c25a7ff34e7f06e1e6e01ecb0427657d9c4'"
+          tar -xzf "$RUNNER_TEMP/sqlite.tar.gz" -C "$RUNNER_TEMP"
+          cd "$RUNNER_TEMP/sqlite-autoconf-3540100"
+          ./configure --prefix="$RUNNER_TEMP/sqlite-fixed" --disable-static --disable-readline
+          make -j2
+          make install
+          echo "LD_LIBRARY_PATH=$RUNNER_TEMP/sqlite-fixed/lib" >> "$GITHUB_ENV"
+      - name: Prepare fixed SQLite on disposable Windows runner
+        if: runner.os == 'Windows'
+        shell: python
+        run: |
+          import hashlib, importlib.util, io, pathlib, urllib.request, zipfile
+          with urllib.request.urlopen('https://sqlite.org/2026/sqlite-dll-win-x64-3540100.zip', timeout=60) as response:
+              data = response.read()
+          assert hashlib.sha3_256(data).hexdigest() == 'c2d09c8babb9399277055c057c97a53f1ffd7c5f11d0c1f2118ffdfa39f2daa4'
+          # Solo el Python efimero del runner, nunca una instalacion del usuario.
+          target = pathlib.Path(importlib.util.find_spec('_sqlite3').origin).parent / 'sqlite3.dll'
+          with zipfile.ZipFile(io.BytesIO(data)) as archive:
+              target.write_bytes(archive.read('sqlite3.dll'))
       - name: Create virtual environment
         run: |
           python -m venv .venv
@@ -48,6 +72,8 @@ jobs:
           fi
       - name: Install development dependencies
         run: python -m pip install -r requirements-dev.txt "pypdf==${{ matrix.pypdf }}"
+      - name: Verify SQLite runtime used by application
+        run: python -c "import sqlite3; from src.infrastructure.persistence.sqlite_connections import require_safe_sqlite; require_safe_sqlite(); print('SQLite', sqlite3.sqlite_version); assert sqlite3.sqlite_version == '3.54.1'"
       - run: python -m pip check
       - run: python -m ruff check .
       - run: python -m ruff format --check .
