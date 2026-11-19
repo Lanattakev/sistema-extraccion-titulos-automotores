@@ -1,5 +1,6 @@
-import { useId, useState } from 'react'
-import type { FormEvent } from 'react'
+import { useId, useRef, useState } from 'react'
+import type { FormEvent, KeyboardEvent } from 'react'
+import { DocumentPreview } from './DocumentPreview'
 import type { BatchDocumentResult } from '../types/documents'
 import type { ConfirmationProps, ReviewedVehicle } from '../types/vehicles'
 
@@ -24,6 +25,35 @@ export function DocumentReview({ result, confirmations, batchConfirmation, onMar
   }))
   const [validationError, setValidationError] = useState<string | null>(null)
   const confirmation = result.id_documento ? confirmations[result.id_documento] : undefined
+  const confirming = useRef(false)
+  const busy = !!(confirmation?.pending || batchConfirmation?.running)
+
+  async function confirm() {
+    if (!result.id_documento || !confirmation?.reviewed || confirmation.dirty || busy || confirmation.registered || confirming.current) return
+    confirming.current = true
+    try {
+      await onConfirm(result.id_documento)
+    } catch (cause) {
+      setValidationError(cause instanceof Error ? cause.message : 'No se pudo confirmar el documento.')
+    } finally {
+      confirming.current = false
+    }
+  }
+
+  function close() {
+    if (!busy && !confirming.current) onClose()
+  }
+
+  function keyDown(event: KeyboardEvent<HTMLElement>) {
+    if (event.defaultPrevented || event.repeat || event.nativeEvent.isComposing) return
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      close()
+    } else if (event.key === 'Enter' && event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey) {
+      event.preventDefault()
+      void confirm()
+    }
+  }
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -38,9 +68,13 @@ export function DocumentReview({ result, confirmations, batchConfirmation, onMar
   }
 
   return (
-    <form className="document-review" onSubmit={submit} aria-labelledby={`${id}-title`}>
+    <section className="document-review" aria-labelledby={`${id}-title`} onKeyDown={keyDown}>
       <h4 id={`${id}-title`}>Revisá la información del título</h4>
       <p>Corregí los datos y marcá el documento como revisado. El vehículo solo se registra al confirmar.</p>
+      <div className="document-review-layout">
+      {result.id_documento ? <DocumentPreview key={result.id_documento} documentId={result.id_documento} name={result.nombre_original ?? ''} /> : <p>No hay un original disponible para este resultado.</p>}
+      <form className="document-review-form" onSubmit={submit} aria-labelledby={`${id}-title`} aria-describedby={`${id}-shortcuts`}>
+      <p id={`${id}-shortcuts`}>En el formulario: Ctrl + Enter confirma un documento ya revisado. Esc cierra la revisión cuando no hay una operación en curso.</p>
       <fieldset disabled={confirmation?.pending || !!confirmation?.registered || batchConfirmation?.running}>
         <legend className="sr-only">Datos del vehículo</legend>
         <div className="review-fields">
@@ -51,10 +85,12 @@ export function DocumentReview({ result, confirmations, batchConfirmation, onMar
       {confirmation?.error && <div className="batch-alert" role="alert"><p>{confirmation.error}</p><p>Si se interrumpió la conexión, consultá Vehículos antes de reintentar: el servidor podría haber guardado el registro.</p></div>}
       <div className="review-actions">
         <button className="primary-button" type="submit" disabled={confirmation?.pending || !!confirmation?.registered || batchConfirmation?.running || !result.id_documento}>Marcar como revisado</button>
-        <button className="primary-button" type="button" disabled={!confirmation?.reviewed || confirmation?.pending || !!confirmation?.registered || batchConfirmation?.running} onClick={() => { if (result.id_documento) void onConfirm(result.id_documento) }}>{confirmation?.savingReview ? 'Guardando revisión...' : confirmation?.pending ? 'Registrando...' : 'Confirmar y registrar'}</button>
-        <button className="text-button" type="button" onClick={onClose} disabled={confirmation?.pending}>Cerrar revisión</button>
+        <button className="primary-button" type="button" aria-keyshortcuts="Control+Enter" disabled={!confirmation?.reviewed || confirmation.dirty || busy || !!confirmation?.registered || !result.id_documento} onClick={() => void confirm()}>{confirmation?.savingReview ? 'Guardando revisión...' : confirmation?.pending ? 'Registrando...' : 'Confirmar y registrar'}</button>
+        <button className="text-button" type="button" aria-keyshortcuts="Escape" onClick={close} disabled={busy}>Cerrar revisión</button>
       </div>
       {confirmation?.pending && <p role="status">{confirmation.savingReview ? 'Guardando la revisión en el servidor.' : 'Confirmando el registro. Esperá la respuesta del servidor.'}</p>}
-    </form>
+      </form>
+      </div>
+    </section>
   )
 }
