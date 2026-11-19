@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 import sys
 from functools import lru_cache
@@ -14,6 +15,26 @@ def default_tesseract_command() -> str:
     if sys.platform == "win32":
         return r"C:\Program Files\Tesseract-OCR\tesseract.exe"
     return shutil.which("tesseract") or "tesseract"
+
+
+def batch_cpu_limit() -> int:
+    """Reserva un CPU y respeta afinidad cuando el sistema la expone."""
+    count = os.cpu_count() or 1
+    process_count = getattr(os, "process_cpu_count", None)
+    if process_count is not None:
+        count = min(count, process_count() or 1)
+    affinity = getattr(os, "sched_getaffinity", None)
+    if affinity is not None:
+        try:
+            count = min(count, len(affinity(0)))
+        except OSError:
+            pass
+    return max(1, min(4, count - 1))
+
+
+def initialize_batch_worker() -> None:
+    """Solo en hijos spawn: evita multiplicar hilos OpenMP por cada Tesseract."""
+    os.environ["OMP_THREAD_LIMIT"] = "1"
 
 
 class Settings(BaseSettings):
@@ -42,6 +63,10 @@ class Settings(BaseSettings):
     # Base de Datos
     DATABASE_URL: str = Field(default="sqlite+aiosqlite:///./app.db")
     SQLITE_POOL_SIZE: int = Field(default=4, gt=0)
+
+    # Lotes: reserva estimada de 256 MiB por proceso, no limite RSS del SO.
+    BATCH_MAX_WORKERS: int = Field(default_factory=batch_cpu_limit, ge=1, le=4)
+    BATCH_MEMORY_BUDGET_MB: int = Field(default=1024, ge=256)
 
     # OCR local
     TESSERACT_CMD: str = Field(default_factory=default_tesseract_command)

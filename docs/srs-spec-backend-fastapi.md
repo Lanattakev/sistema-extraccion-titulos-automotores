@@ -1,8 +1,8 @@
 # SRS-SPECS: Sistema de extracción de títulos automotores — Single Source of Truth (SSOT) & Especificación del Sistema
 
 > **Documento:** `srs-spec-backend-fastapi.md`
-> **Versión:** `2.2.0`
-> **Estado:** `Issue #12 integrado; concurrencia SQLite en revisión mediante el PR del issue #13`
+> **Versión:** `2.3.0`
+> **Estado:** `Issues #12 y #13 integrados; procesamiento paralelo en revisión mediante el PR del issue #14`
 > **Fecha:** `2026-11-18`
 > **Autor(es):** `Kevin Lanatta; desarrollo asistido bajo revisión humana`
 > **Repositorio / Módulo:** `Lanattakev/sistema-extraccion-titulos-automotores`
@@ -115,7 +115,7 @@ POST `/api/v1/documents/batch` acepta entre 1 y 100 archivos en el campo repetid
 
 Un fallo por archivo no interrumpe los siguientes: los campos quedan nulos, `fallo=true`, `requiere_revision=false` y error explícito. Si falla la extracción después de guardar, el resultado conserva el ID del original, pero no agrega el pendiente SQLite. El lote devuelve HTTP 200 con resultados mixtos y no confirma vehículos.
 
-**Concurrencia real:** `ProcessBatchDocumentsUseCase.execute` espera cada `asyncio.to_thread` antes de procesar el siguiente archivo: hay un archivo en proceso por lote, fuera del event loop. Esto permite atender otras solicitudes, pero no paraleliza archivos del mismo lote. Paralelismo interno y límites globales de trabajo quedan pendientes. Cambiarlos requerirá preservar orden, aislamiento por archivo, memoria acotada y atomicidad de confirmación.
+**Concurrencia real:** El caso de uso conserva índices de entrada y consumidores acotados. El adaptador comparte ProcessPoolExecutor con spawn por lifespan y limita admisión entre lotes por CPU/afinidad (máximo 4, reserva un CPU lógico) y presupuesto estimado (256 MiB por trabajador). Los hijos extraen texto de rutas; parser y SQLite quedan en el padre. Fallo de pool degrada a extracción secuencial sin repetir cargas; errores normales siguen aislados por archivo. Se drenan trabajos activos ante cancelación y se cierran procesos al apagar. Ver [contrato, pruebas, benchmark y límites](parallel-batches.md). No es un límite RSS del SO ni una cola durable; múltiples procesos web multiplican los pools.
 
 **Verificación:** pruebas de lote en `tests/test_documents.py` y `tests/unit/test_document_use_cases.py`; cliente HTTP y flujo en `frontend/tests/`.
 
@@ -124,7 +124,7 @@ Un fallo por archivo no interrumpe los siguientes: los campos quedan nulos, `fal
 | ID | Contrato actual y condición verificable | Limitación u objetivo pendiente |
 | --- | --- | --- |
 | NFR-01 Latencia | OCR usa `TESSERACT_TIMEOUT`, entero positivo, 30 s por invocación de Tesseract por defecto. No es un timeout total de solicitud; varias páginas pueden sumar varias invocaciones. | No hay medición p95 ni SLO aprobado para lectura/extracción. Antes de fijarlos, medir p50/p95, errores y memoria sobre documentos sintéticos, registrando hardware, versiones, volumen, tamaño y concurrencia; separar PDF nativo, imagen y PDF escaneado. No prometer milisegundos sin esa evidencia. |
-| NFR-02 Concurrencia | Un archivo activo por lote; trabajo bloqueante fuera del event loop. SQLite usa WAL, synchronous=NORMAL, busy_timeout=30000, foreign_keys=ON y pool compartido por lifespan (SQLITE_POOL_SIZE, defecto 4); escrituras BEGIN IMMEDIATE. Runtime corregido obligatorio; ver [contrato y límites SQLite](sqlite-concurrency.md). | Pruebas concurrentes acotadas comprueban snapshots, confirmaciones, rollback e integridad; no acreditan RPS, carga sostenida o capacidad global. SQLite conserva un solo escritor y puede agotar esperas bajo contención externa. El paralelismo interno de lotes sigue pendiente (#14). |
+| NFR-02 Concurrencia | Lotes con procesos spawn, orden estable y admisión compartida acotada; fallback secuencial. SQLite usa WAL, synchronous=NORMAL, busy_timeout=30000, foreign_keys=ON y pool compartido por lifespan (SQLITE_POOL_SIZE, defecto 4); escrituras BEGIN IMMEDIATE. Runtime corregido obligatorio; ver [contrato y límites SQLite](sqlite-concurrency.md). | Pruebas concurrentes acotadas comprueban snapshots, confirmaciones, rollback e integridad; no acreditan RPS, carga sostenida o capacidad global. SQLite conserva un solo escritor y puede agotar esperas bajo contención externa. El paralelismo de #14 tiene benchmark sintético; quedan pendientes carga sostenida y límites globales entre procesos web. |
 | NFR-03 Límites de carga | 10 MiB por archivo y hasta 100 archivos por lote. Copia de bytes en bloques y renderizado OCR de una página por vez. | No hay límite propio de páginas, píxeles, tiempo total del lote o tasa global de solicitudes. Los límites de bytes no equivalen a un presupuesto de memoria o CPU del OCR. |
 | NFR-04 Integridad y recuperación | SQLite guarda documento, ingreso e historial transaccionalmente en revisión/confirmación. Los estados persisten tras reinicio. La SPA informa errores, evita doble envío y consulta el estado tras una confirmación incierta. | Sin SLA de disponibilidad, backups/restauración automatizados, retención ni transacción única entre disco y SQLite. |
 | NFR-05 Seguridad y privacidad | Nombres internos UUID, validación de rutas/nombres y consultas parametrizadas; secretos fuera de Git. Evaluación local con documentos sintéticos. | Sin autenticación/autorización, rate limiting, antivirus, TLS propio, cifrado en reposo ni certificación normativa. CORS permisivo por defecto. No declarar preparación para producción. |

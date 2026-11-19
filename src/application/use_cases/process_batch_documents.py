@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from collections.abc import Callable, Iterable
+from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import asdict
 from typing import BinaryIO
 
@@ -29,29 +29,59 @@ class ProcessBatchDocumentsUseCase:
         self,
         save_document: Callable[[BinaryIO, str], Document],
         extract_fields: Callable[[str], ProposedVehicleFields],
+        *,
+        process_saved: Callable[[Document], Awaitable[ProposedVehicleFields]] | None = None,
+        parallelism: int = 1,
     ) -> None:
+        if parallelism < 1:
+            raise ValueError("El paralelismo del lote debe ser positivo.")
         self.save_document = save_document
         self.extract_fields = extract_fields
+        self.process_saved = process_saved
+        self.parallelism = parallelism
 
     async def execute(
         self,
         uploads: Iterable[DocumentUpload | RejectedDocumentUpload],
     ) -> list[BatchDocumentResult]:
-        # Como antes, un archivo a la vez: orden estable y memoria acotada.
-        # El trabajo bloqueante se ejecuta fuera del event loop con la biblioteca estandar.
-        results: list[BatchDocumentResult] = []
-        for upload in uploads:
-            results.append(await asyncio.to_thread(self.process_file, upload))
-        return results
+        indexed = iter(enumerate(uploads))
+        results: dict[int, BatchDocumentResult] = {}
+        stopped = False
 
-    def process_file(self, upload: DocumentUpload | RejectedDocumentUpload) -> BatchDocumentResult:
+        async def consume() -> None:
+            while not stopped:
+                item = next(indexed, None)
+                if item is None:
+                    break
+                index, upload = item
+                results[index] = await self._process_file(upload)
+
+        tasks = [asyncio.create_task(consume()) for _ in range(self.parallelism)]
+        try:
+            await asyncio.shield(asyncio.gather(*tasks))
+        except BaseException:
+            # Drenar archivos en curso antes de cerrar el multipart; no iniciar otros.
+            stopped = True
+            await asyncio.gather(*tasks, return_exceptions=True)
+            raise
+        return [results[index] for index in sorted(results)]
+
+    async def _process_file(
+        self, upload: DocumentUpload | RejectedDocumentUpload
+    ) -> BatchDocumentResult:
         result = BatchDocumentResult(nombre_original=upload.nombre_original)
         try:
             if isinstance(upload, RejectedDocumentUpload):
                 raise upload.error
-            document = self.save_document(upload.source, upload.nombre_original)
+            document = await asyncio.to_thread(
+                self.save_document, upload.source, upload.nombre_original
+            )
             result.id_documento = document.id_documento
-            proposal = self.extract_fields(document.id_documento)
+            proposal = (
+                await self.process_saved(document)
+                if self.process_saved is not None
+                else await asyncio.to_thread(self.extract_fields, document.id_documento)
+            )
             return BatchDocumentResult(**asdict(proposal), nombre_original=document.nombre_original)
         except (
             InvalidDocument,

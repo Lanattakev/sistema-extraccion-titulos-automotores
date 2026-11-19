@@ -1,6 +1,8 @@
 """src/infrastructure/extraction/factory.py - Seleccion extensible por MIME."""
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
+
+from PIL import Image
 
 from src.application.document_errors import UnsupportedDocument
 from src.application.text_extraction import PdfTextExtractor, TextExtractor
@@ -10,11 +12,18 @@ from src.infrastructure.extraction.scanned_pdf import ScannedPdfOcrExtractor
 
 
 class TextExtractorFactory:
-    def __init__(self, extractors: Mapping[str, TextExtractor] | None = None) -> None:
+    def __init__(
+        self,
+        extractors: Mapping[str, TextExtractor] | None = None,
+        *,
+        recognize: Callable[[Image.Image], str] | None = None,
+    ) -> None:
         if extractors is None:
-            image = ImageOcrExtractor()
+            image = ImageOcrExtractor(recognize)
             extractors = {
-                "application/pdf": PdfTextExtractor(NativePdfExtractor(), ScannedPdfOcrExtractor()),
+                "application/pdf": PdfTextExtractor(
+                    NativePdfExtractor(), ScannedPdfOcrExtractor(recognize)
+                ),
                 "image/jpeg": image,
                 "image/png": image,
             }

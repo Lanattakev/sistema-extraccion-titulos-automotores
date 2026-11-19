@@ -1,9 +1,11 @@
 """src/infrastructure/fastapi/document_dependencies.py - Composicion de casos de uso."""
 
+import asyncio
 from typing import Annotated
 
 from fastapi import Depends, Request
 
+from src.application.dtos.document_dtos import Document, ProposedVehicleFields
 from src.application.use_cases.document_extraction import (
     ExtractDocumentFieldsUseCase,
     ExtractDocumentTextUseCase,
@@ -15,6 +17,7 @@ from src.application.use_cases.document_workflow import (
 )
 from src.application.use_cases.process_batch_documents import ProcessBatchDocumentsUseCase
 from src.domain.repositories import DocumentRepository
+from src.infrastructure.batch_processing import BatchDocumentProcessor
 from src.infrastructure.document_processing import read_document_text
 from src.infrastructure.persistence import local_document_storage as storage
 
@@ -50,6 +53,20 @@ def get_confirm_use_case(repository: Repository) -> ConfirmDocumentUseCase:
 
 
 def get_batch_use_case(
+    request: Request,
     fields: Annotated[ExtractDocumentFieldsUseCase, Depends(get_fields_use_case)],
 ) -> ProcessBatchDocumentsUseCase:
-    return ProcessBatchDocumentsUseCase(storage.save_document, fields.execute)
+    processor: BatchDocumentProcessor = request.app.state.batch_processor
+
+    async def process_saved(document: Document) -> ProposedVehicleFields:
+        text = await processor.extract(document, storage.UPLOAD_DIRECTORY / document.nombre_interno)
+        # El proceso hijo solo extrae texto. Parser, SQLite y eventos quedan en el padre.
+        case = ExtractDocumentFieldsUseCase(lambda _: text, fields.repository)
+        return await asyncio.to_thread(case.execute, document.id_documento)
+
+    return ProcessBatchDocumentsUseCase(
+        storage.save_document,
+        fields.execute,
+        process_saved=process_saved,
+        parallelism=processor.max_workers,
+    )
