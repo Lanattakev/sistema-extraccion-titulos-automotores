@@ -1,7 +1,7 @@
 """src/main.py — Entrypoint principal de la aplicación FastAPI."""
 
 from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, closing
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from src.infrastructure.fastapi.routers.documents import router as documents_router
 from src.infrastructure.fastapi.routers.history import router as history_router
 from src.infrastructure.fastapi.routers.vehicles import router as vehicles_router
+from src.infrastructure.persistence.sqlite_connections import SQLiteConnectionPool
 from src.infrastructure.persistence.sqlite_document_repository import SQLiteDocumentRepository
 from src.infrastructure.persistence.sqlite_vehicle_repository import SQLiteVehicleRepository
 from src.infrastructure.settings.config import get_settings
@@ -19,17 +20,22 @@ from src.infrastructure.settings.logger import logger
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Ciclo de vida de la aplicación: inicialización y cierre ordenado de recursos."""
     logger.info("Iniciando aplicación y verificando configuración...")
-    database_url = get_settings().DATABASE_URL
+    settings = get_settings()
     for prefix in ("sqlite+aiosqlite:///", "sqlite:///"):
-        if database_url.startswith(prefix):
-            app.state.vehicle_repository = SQLiteVehicleRepository(database_url[len(prefix) :])
-            app.state.document_repository = SQLiteDocumentRepository(database_url[len(prefix) :])
-            app.state.history_repository = app.state.document_repository.history_repository
+        if settings.DATABASE_URL.startswith(prefix):
+            database_path = settings.DATABASE_URL[len(prefix) :]
             break
     else:
         raise ValueError("DATABASE_URL debe utilizar SQLite.")
-    yield
-    logger.info("Cerrando recursos y conexiones de la aplicación...")
+    with closing(SQLiteConnectionPool(database_path, settings.SQLITE_POOL_SIZE)) as pool:
+        app.state.sqlite_connections = pool
+        app.state.vehicle_repository = SQLiteVehicleRepository(database_path, pool=pool)
+        app.state.document_repository = SQLiteDocumentRepository(database_path, pool=pool)
+        app.state.history_repository = app.state.document_repository.history_repository
+        try:
+            yield
+        finally:
+            logger.info("Cerrando recursos y conexiones de la aplicación...")
 
 
 def create_app() -> FastAPI:

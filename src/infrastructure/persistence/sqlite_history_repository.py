@@ -1,18 +1,23 @@
 """src/infrastructure/persistence/sqlite_history_repository.py"""
 
 import sqlite3
-from contextlib import closing
 from datetime import datetime
 from pathlib import Path
 
 from src.domain.history_event import HistoryEvent, HistoryEventType
 from src.domain.repositories import HistoryRepository
+from src.infrastructure.persistence.sqlite_connections import (
+    SQLiteConnectionPool,
+    sqlite_connection,
+)
 
 
 class SQLiteHistoryRepository(HistoryRepository):
-    def __init__(self, db_path: str | Path) -> None:
+    def __init__(self, db_path: str | Path, *, pool: SQLiteConnectionPool | None = None) -> None:
         self._db_path = str(db_path)
-        with closing(sqlite3.connect(self._db_path)) as connection, connection:
+        self._pool = pool
+        with sqlite_connection(self._db_path, self._pool) as connection:
+            connection.execute("BEGIN IMMEDIATE")
             connection.execute("""
                 CREATE TABLE IF NOT EXISTS history_events (
                     id_evento TEXT PRIMARY KEY NOT NULL,
@@ -55,8 +60,7 @@ class SQLiteHistoryRepository(HistoryRepository):
         )
 
     def list_all(self) -> list[HistoryEvent]:
-        with closing(sqlite3.connect(self._db_path)) as connection:
-            connection.row_factory = sqlite3.Row
+        with sqlite_connection(self._db_path, self._pool) as connection:
             rows = connection.execute(
                 "SELECT * FROM history_events ORDER BY fecha_evento DESC, rowid DESC",
             ).fetchall()

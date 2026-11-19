@@ -4,6 +4,13 @@ Aplicación local con backend FastAPI y SPA React 19 para cargar títulos automo
 
 ## Estado del MVP
 
+SQLite usa WAL y un pool compartido durante el ciclo de vida de FastAPI
+(`SQLITE_POOL_SIZE=4`). **El motor debe ser >= 3.51.3 o un backport corregido**;
+el arranque rechaza motores afectados por WAL-reset antes de abrir la base.
+Consultar [concurrencia SQLite](docs/sqlite-concurrency.md) para comprobar el
+runtime, preparar Windows sin reemplazar Python instalado, conocer los pragmas,
+los límites de durabilidad y ejecutar las pruebas del issue #13.
+
 MVP local con SPA React 19, TypeScript y Vite, API FastAPI, Swagger y persistencia SQLite. La extracción funciona sobre PDF con texto extraíble mediante pypdf y sobre JPG/JPEG/PNG mediante OCR local con Tesseract, pytesseract y Pillow. El OCR de imágenes está implementado y probado con mocks; esto no acredita precisión sobre documentos reales. El fallback OCR para PDF escaneado también está implementado. En PDF se intenta pypdf primero: si el parser no obtiene ningún campo válido del texto directo, se renderizan las páginas con pypdfium2 y se aplica el OCR existente con Tesseract.
 
 ## Funcionalidades implementadas
