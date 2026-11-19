@@ -92,6 +92,44 @@ def test_cancelled_batch_drains_inflight_uploads_without_starting_more():
     asyncio.run(run())
 
 
+def test_parallel_completion_stores_pending_in_input_order_and_continues_after_storage_error():
+    async def run():
+        last_finished = asyncio.Event()
+        stored, finished = [], []
+
+        def save(source, name):
+            return Document(name, name, name, "application/pdf", 3)
+
+        async def extract(document):
+            if document.id_documento == "first.pdf":
+                await last_finished.wait()
+            elif document.id_documento == "broken.pdf":
+                last_finished.set()
+            finished.append(document.id_documento)
+            return ProposedVehicleFields(document.id_documento, patente="AB123CD")
+
+        def persist(document):
+            stored.append(document.id_documento)
+            if document.id_documento == "broken.pdf":
+                raise RuntimeError("synthetic storage failure")
+
+        names = ["first.pdf", "broken.pdf", "last.pdf"]
+        case = ProcessBatchDocumentsUseCase(
+            save, Mock(), process_saved=extract, parallelism=3, save_pending=persist
+        )
+        results = await asyncio.wait_for(
+            case.execute([DocumentUpload(BytesIO(b"pdf"), name) for name in names]), 5
+        )
+        assert finished.index("broken.pdf") < finished.index("first.pdf")
+        assert stored == names
+        assert [r.nombre_original for r in results] == names
+        assert [r.fallo for r in results] == [False, True, False]
+        assert results[1].id_documento == "broken.pdf" and results[1].patente is None
+        assert results[1].requiere_revision is False
+
+    asyncio.run(run())
+
+
 @pytest.mark.parametrize(
     "cpus,affinity,expected", [(None, 1, 1), (1, 1, 1), (2, 2, 1), (8, 3, 2), (32, 32, 4)]
 )

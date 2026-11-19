@@ -4,7 +4,8 @@
 
 `ProcessBatchDocumentsUseCase` consume las entradas con un número acotado de
 consumidores y devuelve resultados por índice original, aunque terminen en otro
-orden. Cada archivo conserva su resultado y sus errores: un fallo no interrumpe
+orden. La persistencia de pendientes/eventos tambien se confirma por indice de
+entrada para conservar el orden historico de GET /documents. Cada archivo conserva su resultado y sus errores: un fallo no interrumpe
 los restantes ni inventa campos. Se mantienen el endpoint, DTO y OpenAPI.
 
 FastAPI crea un `BatchDocumentProcessor` por lifespan, compartido entre solicitudes.

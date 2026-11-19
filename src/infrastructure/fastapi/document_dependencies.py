@@ -1,11 +1,11 @@
 """src/infrastructure/fastapi/document_dependencies.py - Composicion de casos de uso."""
 
-import asyncio
 from typing import Annotated
 
 from fastapi import Depends, Request
 
 from src.application.dtos.document_dtos import Document, ProposedVehicleFields
+from src.application.title_field_extraction import extract_title_fields
 from src.application.use_cases.document_extraction import (
     ExtractDocumentFieldsUseCase,
     ExtractDocumentTextUseCase,
@@ -60,13 +60,13 @@ def get_batch_use_case(
 
     async def process_saved(document: Document) -> ProposedVehicleFields:
         text = await processor.extract(document, storage.UPLOAD_DIRECTORY / document.nombre_interno)
-        # El proceso hijo solo extrae texto. Parser, SQLite y eventos quedan en el padre.
-        case = ExtractDocumentFieldsUseCase(lambda _: text, fields.repository)
-        return await asyncio.to_thread(case.execute, document.id_documento)
+        # La persistencia se realiza luego, por indice, en el caso de uso del lote.
+        return extract_title_fields(document.id_documento, text.texto_extraido)
 
     return ProcessBatchDocumentsUseCase(
         storage.save_document,
         fields.execute,
         process_saved=process_saved,
         parallelism=processor.max_workers,
+        save_pending=fields.repository.save_pending,
     )

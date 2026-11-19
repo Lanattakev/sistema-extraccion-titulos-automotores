@@ -223,6 +223,7 @@ def test_http_parallel_batch_order_failures_persistence_and_no_automatic_confirm
         assert all(r["id_documento"] for r in results)
         assert [r["patente"] for r in results] == ["AB123CD", None, "XY123ZZ"]
         documents = client.get("/api/v1/documents").json()
+        assert [d["nombre_original"] for d in documents] == ["one.pdf", "last.pdf"]
         assert {d["id_documento"] for d in documents} == {
             results[0]["id_documento"],
             results[2]["id_documento"],
